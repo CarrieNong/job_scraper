@@ -69,8 +69,10 @@ def scrape_jobs(driver, max_jobs=15):
     
     print(f"页面滚动完成，共滚动 {scroll_count} 次")
     
-    # 等待一下确保所有职位加载完成
-    time.sleep(3)
+    # 等待一下确保所有职位加载完成，增加随机性
+    final_wait = random.uniform(3, 6)  # 从固定3秒改为3-6秒随机
+    print(f"等待 {final_wait:.1f} 秒确保所有职位完全加载...")
+    time.sleep(final_wait)
     
     job_list = wait.until(EC.presence_of_all_elements_located(
         (By.CSS_SELECTOR, ".scaffold-layout__list-item"))
@@ -133,6 +135,11 @@ def scrape_jobs(driver, max_jobs=15):
             if href_value in processed_links:
                 print(f"第 {index+1} 个职位：链接已存在，跳过")
                 continue
+            
+            # 新增：如果title包含angular、fullstack、backend、lead、staff则跳过
+            if any(keyword in title.lower() for keyword in ['angular', 'fullstack', 'backend', 'lead', 'staff']):
+                print(f"第 {index+1} 个职位：标题包含angular/fullstack/backend，跳过")
+                continue
 
             # 点击职位卡
             print(f"第 {index+1} 个职位：开始点击职位卡片...")
@@ -192,11 +199,6 @@ def scrape_jobs(driver, max_jobs=15):
                 continue
             print(f"第 {index+1} 个职位：技术栈检测通过")
 
-            # 新增：如果title包含angular、fullstack、backend则跳过
-            if any(keyword in title.lower() for keyword in ['angular', 'fullstack', 'backend']):
-                print(f"第 {index+1} 个职位：标题包含angular/fullstack/backend，跳过")
-                continue
-
             # 数字过滤，申请数量超过100的跳过
             print(f"第 {index+1} 个职位：开始申请人数过滤...")
             nums = extract_numbers(apply_number)
@@ -222,10 +224,17 @@ def scrape_jobs(driver, max_jobs=15):
                 jobs_data.append(job_data)
                 processed_links.add(href_value)  # 添加到已处理集合
                 print(f"第 {index+1} 个职位：成功保存到数据库")
-            else:
-                print(f"第 {index+1} 个职位：数据库中已存在，跳过")
 
-            time.sleep(random.uniform(2, 4))  # 随机延迟
+            # 偶尔添加"思考时间"模拟人类行为
+            if random.random() < 0.3:  # 30% 概率
+                think_time = random.uniform(1, 3)
+                print(f"第 {index+1} 个职位：思考时间 {think_time:.1f} 秒...")
+                time.sleep(think_time)
+
+            # 增加职位处理间隔，降低反爬虫风险
+            delay_time = random.uniform(4, 8)  # 从 2-4秒 改为 4-8秒
+            print(f"第 {index+1} 个职位：等待 {delay_time:.1f} 秒后处理下一个...")
+            time.sleep(delay_time)
 
         except StaleElementReferenceException:
             print(f"第{index+1}个职位遇到 stale element，已跳过。")
@@ -255,7 +264,18 @@ def scrape_all_pages(driver, max_pages=10, max_jobs_per_page=30):
             driver.execute_script("arguments[0].scrollIntoView();", next_btn)
             time.sleep(0.5)
             next_btn.click()
-            time.sleep(3)  # 等待页面加载
+            
+            # 增加翻页后等待时间，降低反爬虫风险
+            wait_time = random.uniform(5, 10)  # 从 3秒 改为 5-10秒随机
+            print(f"翻页完成，等待 {wait_time:.1f} 秒让页面加载...")
+            time.sleep(wait_time)
+            
+            # 页面间添加随机休息时间，模拟人类浏览行为
+            if page < max_pages - 1:  # 不是最后一页
+                rest_time = random.uniform(15, 30)
+                print(f"页面处理完成，休息 {rest_time:.1f} 秒...")
+                time.sleep(rest_time)
+                
         except ElementClickInterceptedException:
             print("下一页按钮被遮挡，尝试跳过本次翻页。")
             continue
