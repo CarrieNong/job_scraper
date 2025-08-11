@@ -46,6 +46,29 @@ def get_status(job):
     except NoSuchElementException:
         return 'new'
     
+def find_title_and_link(job, driver, timeout: int = 10):
+    """
+    在单个职位卡片 job 内查找可点击的链接元素，并返回 (element, title, href)。
+    通过多套选择器与显式等待，提升鲁棒性。
+    """
+    selectors = [
+        "a.job-card-container__link",
+        "a.job-card-list__title--link",
+        "a[href*='/jobs/view/'][aria-label]",
+        "a[aria-label]",
+    ]
+    for selector in selectors:
+        try:
+            WebDriverWait(driver, timeout).until(lambda d: job.find_element(By.CSS_SELECTOR, selector))
+            el = job.find_element(By.CSS_SELECTOR, selector)
+            href_value = el.get_attribute("href")
+            title_value = el.get_attribute("aria-label") or el.text.strip()
+            if href_value:
+                return el, title_value, href_value
+        except Exception:
+            continue
+    return None, None, None
+
 def scrape_jobs(driver, max_jobs=15):
     wait = WebDriverWait(driver, 15)
     
@@ -79,16 +102,14 @@ def scrape_jobs(driver, max_jobs=15):
     )
 
     # 新增：滚动职位列表到底部，确保所有职位都在可见范围内
-    print("开始滚动职位列表到底部...")
+    print("滚动到列表最后一个职位以激活渲染...")
     try:
-        # 找到职位列表容器
-        job_list_container = driver.find_element(By.CSS_SELECTOR, ".jobs-search__results-list")
-        # 滚动到列表底部
-        driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", job_list_container)
-        time.sleep(2)  # 等待滚动完成
-        print("职位列表滚动完成")
+        if job_list:
+            driver.execute_script("arguments[0].scrollIntoView({block: 'end'});", job_list[-1])
+            time.sleep(1)
+            print("已滚动到最后一个职位")
     except Exception as e:
-        print(f"滚动职位列表时出错: {e}")
+        print(f"滚动最后一个职位时出错（忽略继续）: {e}")
 
     jobs_data = []
     processed_links = set()  # 用于去重的链接集合
@@ -99,25 +120,24 @@ def scrape_jobs(driver, max_jobs=15):
         try:
             # 每次都重新获取职位列表，避免 stale element
             print(f"第 {index+1} 个职位：重新获取职位列表...")
-            current_job_list = driver.find_elements(By.CSS_SELECTOR, ".scaffold-layout__list-item")
+            # 优先使用更精确的职位选择器，避免抓到非职位项
+            current_job_list = driver.find_elements(By.CSS_SELECTOR, "li[data-occludable-job-id]") or \
+                               driver.find_elements(By.CSS_SELECTOR, ".scaffold-layout__list-item")
             if index >= len(current_job_list):
                 print(f"第 {index+1} 个职位：索引超出范围，跳过")
                 continue
                 
             job = current_job_list[index]
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", job)
-            # 等待 job 内部的 link 出现（虚拟列表渲染完成）
-            wait.until(EC.presence_of_element_located((
-                By.CSS_SELECTOR,
-                ".job-card-container__link"
-            )))
                 
             print(f"第 {index+1} 个职位：成功获取职位元素")
-
-
+ 
             print(f"第 {index+1} 个职位：开始获取基本信息...")
-            title = job.find_element(By.CSS_SELECTOR, ".job-card-container__link").get_attribute("aria-label")
-            print(f"第 {index+1} 个职位：成功获取标题: {title}")
+            link_el, title, href_value = find_title_and_link(job, driver)
+            if not link_el:
+                print(f"第 {index+1} 个职位：无法在该职位卡片内找到可点击链接，跳过")
+                continue
+            print(f"第 {index+1} 个职位：成功获取标题与链接: {title} | {href_value[:50]}...")
             
             company = job.find_element(By.CSS_SELECTOR, ".artdeco-entity-lockup__subtitle span").text.strip()
             print(f"第 {index+1} 个职位：成功获取公司: {company}")
@@ -127,9 +147,6 @@ def scrape_jobs(driver, max_jobs=15):
             
             status = get_status(job)
             print(f"第 {index+1} 个职位：成功获取状态: {status}")
-            
-            href_value = job.find_element(By.CSS_SELECTOR, ".job-card-container__link").get_attribute("href")
-            print(f"第 {index+1} 个职位：成功获取链接: {href_value[:50]}...")
 
             # 内存中去重检查
             if href_value in processed_links:
@@ -314,5 +331,5 @@ def scrape_all_pages(driver, max_pages=10, max_jobs_per_page=30):
             print("未找到下一页按钮，结束。"); break
     return all_jobs
 
-jobs = scrape_all_pages(driver, max_pages=2, max_jobs_per_page=30)
+jobs = scrape_all_pages(driver, max_pages=1, max_jobs_per_page=30)
 print("共抓取到", len(jobs), "个职位")
