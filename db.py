@@ -16,6 +16,8 @@ def init_db():
         link TEXT UNIQUE,
         description TEXT,
         html TEXT,
+        is_match INTEGER,             -- 1 符合, 0 不符合
+        reject_reason TEXT,           -- 不符合原因
         status TEXT DEFAULT 'new',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
@@ -28,23 +30,25 @@ def save_job(job):
     cursor = conn.cursor()
     try:
         cursor.execute("""
-        INSERT INTO jobs (title, company, location, applicants, link, description, html, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO jobs (title, company, location, applicants, link, description, html, is_match, reject_reason, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            job['title'],
-            job['company'],
-            job['location'],
-            job['applicants'],
-            job['link'],
-            job['description'],
-            job['html'],
-            job['status']
+            job.get('title', ''),
+            job.get('company', ''),
+            job.get('location', ''),
+            job.get('applicants', ''),
+            job.get('link', ''),
+            job.get('description', ''),
+            job.get('html', ''),
+            1 if job.get('is_match', True) else 0,
+            job.get('reject_reason', ''),
+            job.get('status', 'new')
         ))
         conn.commit()
-        print(f"成功保存职位: {job['title']}")
+        print(f"成功保存职位: {job.get('title', '')}")
         return True
     except sqlite3.IntegrityError:
-        print(f"职位已存在，跳过: {job['title']}")
+        print(f"职位已存在，跳过: {job.get('title', '')}")
         return False
     finally:
         conn.close()

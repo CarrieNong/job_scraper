@@ -136,9 +136,33 @@ def scrape_jobs(driver, max_jobs=15):
                 print(f"第 {index+1} 个职位：链接已存在，跳过")
                 continue
             
-            # 新增：如果title包含angular、fullstack、backend、lead、staff则跳过
+            # 新增：如果title包含angular、fullstack、backend、lead、staff则标记为不符合并直接保存（不点开详情）
             if any(keyword in title.lower() for keyword in ['angular', 'fullstack', 'backend', 'lead', 'staff']):
-                print(f"第 {index+1} 个职位：标题包含angular/fullstack/backend，跳过")
+                print(f"第 {index+1} 个职位：标题包含angular/fullstack/backend/lead/staff，将以不符合保存")
+                job_data = {
+                    "title": title,
+                    "company": company,
+                    "location": location,
+                    "status": status,
+                    "link": href_value,
+                    "applicants": "",
+                    "html": "",
+                    "description": "",
+                    "is_match": False,
+                    "reject_reason": "title_blacklist"
+                }
+                if save_job(job_data):
+                    jobs_data.append(job_data)
+                    processed_links.add(href_value)
+                    print(f"第 {index+1} 个职位：不符合（标题黑名单），已保存")
+                # 友好延时
+                if random.random() < 0.3:
+                    think_time = random.uniform(1, 3)
+                    print(f"第 {index+1} 个职位：思考时间 {think_time:.1f} 秒...")
+                    time.sleep(think_time)
+                delay_time = random.uniform(4, 8)
+                print(f"第 {index+1} 个职位：等待 {delay_time:.1f} 秒后处理下一个...")
+                time.sleep(delay_time)
                 continue
 
             # 点击职位卡
@@ -176,38 +200,44 @@ def scrape_jobs(driver, max_jobs=15):
             print(f"第 {index+1} 个职位：{title} | {company} | {location}")
             print(f"第 {index+1} 个职位：详情长度: {len(job_desc) if job_desc else '无'}")
 
-            # 语言过滤
+            # 语言过滤（改为计算is_match与reject_reason，不再直接continue）
             print(f"第 {index+1} 个职位：开始语言检测...")
             langs = detect_langs(job_desc)
             print(f"第 {index+1} 个职位：语言检测结果: {langs}")
-            # langs 是类似 [en:0.85, de:0.10] 这样的列表
             en_prob = 0
             for lang in langs:
                 if lang.lang == "en":
                     en_prob = lang.prob
                     break
             print(f"第 {index+1} 个职位：英文概率: {en_prob}")
+
+            is_match = True
+            reject_reason = ""
+            
             if en_prob < 0.85:
-                print(f"第 {index+1} 个职位：英文概率 {en_prob} < 0.85，跳过")
-                continue  # 不满足阈值，跳过
+                is_match = False
+                reject_reason = f"low_en_prob:{en_prob:.2f}"
+            else:
+                # 技术栈过滤：必须包含react、react.js、vue或vue.js
+                print(f"第 {index+1} 个职位：开始技术栈检测...")
+                required_tech = ['react', 'react.js', 'vue', 'vue.js']
+                if not any(tech in job_desc_text.lower() for tech in required_tech):
+                    is_match = False
+                    reject_reason = "missing_required_tech"
+                    print(f"第 {index+1} 个职位：职位描述不包含react/vue技术栈")
+                else:
+                    print(f"第 {index+1} 个职位：技术栈检测通过")
+                    # 数字过滤，申请数量超过100的标记为不符合
+                    print(f"第 {index+1} 个职位：开始申请人数过滤...")
+                    nums = extract_numbers(apply_number)
+                    print(f"第 {index+1} 个职位：申请人数解析结果: {nums}")
+                    if nums and isinstance(nums[0], (int, float)) and nums[0] >= 100:
+                        is_match = False
+                        reject_reason = f"too_many_applicants:{nums[0]}"
+                        print(f"第 {index+1} 个职位：申请人数 {nums[0]} >= 100")
 
-            # 技术栈过滤：必须包含react、react.js、vue或vue.js
-            print(f"第 {index+1} 个职位：开始技术栈检测...")
-            required_tech = ['react', 'react.js', 'vue', 'vue.js']
-            if not any(tech in job_desc_text.lower() for tech in required_tech):
-                print(f"第 {index+1} 个职位：职位描述不包含react/vue技术栈，跳过")
-                continue
-            print(f"第 {index+1} 个职位：技术栈检测通过")
-
-            # 数字过滤，申请数量超过100的跳过
-            print(f"第 {index+1} 个职位：开始申请人数过滤...")
-            nums = extract_numbers(apply_number)
-            print(f"第 {index+1} 个职位：申请人数解析结果: {nums}")
-            if nums and isinstance(nums[0], (int, float)) and nums[0] >= 100:
-                print(f"第 {index+1} 个职位：申请人数 {nums[0]} >= 100，跳过")
-                continue
-
-            print(f"第 {index+1} 个职位：通过所有过滤条件，准备保存...")
+            # 统一保存（无论是否符合）
+            print(f"第 {index+1} 个职位：准备保存，is_match={is_match}, reject_reason='{reject_reason}'")
             job_data = {
                 "title": title,
                 "company": company,
@@ -216,15 +246,16 @@ def scrape_jobs(driver, max_jobs=15):
                 "link": href_value,
                 "applicants": apply_number,
                 "html": job_desc,
-                "description": job_desc_text
+                "description": job_desc_text,
+                "is_match": is_match,
+                "reject_reason": reject_reason
             }
             
-            # 保存到数据库并更新内存中的已处理链接集合
             if save_job(job_data):
                 jobs_data.append(job_data)
                 processed_links.add(href_value)  # 添加到已处理集合
-                print(f"第 {index+1} 个职位：成功保存到数据库")
-
+                print(f"第 {index+1} 个职位：已保存 (is_match={is_match})")
+            
             # 偶尔添加"思考时间"模拟人类行为
             if random.random() < 0.3:  # 30% 概率
                 think_time = random.uniform(1, 3)
