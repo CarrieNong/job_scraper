@@ -184,6 +184,14 @@ def scrape_jobs(driver, max_jobs=15):
                 print(f"第 {index+1} 个职位：英文概率 {en_prob} < 0.85，跳过")
                 continue  # 不满足阈值，跳过
 
+            # 技术栈过滤：必须包含react、react.js、vue或vue.js
+            print(f"第 {index+1} 个职位：开始技术栈检测...")
+            required_tech = ['react', 'react.js', 'vue', 'vue.js']
+            if not any(tech in job_desc_text.lower() for tech in required_tech):
+                print(f"第 {index+1} 个职位：职位描述不包含react/vue技术栈，跳过")
+                continue
+            print(f"第 {index+1} 个职位：技术栈检测通过")
+
             # 新增：如果title包含angular、fullstack、backend则跳过
             if any(keyword in title.lower() for keyword in ['angular', 'fullstack', 'backend']):
                 print(f"第 {index+1} 个职位：标题包含angular/fullstack/backend，跳过")
@@ -255,5 +263,5 @@ def scrape_all_pages(driver, max_pages=10, max_jobs_per_page=30):
             print("未找到下一页按钮，结束。"); break
     return all_jobs
 
-jobs = scrape_all_pages(driver, max_pages=1, max_jobs_per_page=30)
+jobs = scrape_all_pages(driver, max_pages=2, max_jobs_per_page=30)
 print("共抓取到", len(jobs), "个职位")
