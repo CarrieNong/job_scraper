@@ -15,16 +15,16 @@ def sync_jobs_to_notion():
     cursor = conn.cursor()
 
     # 1. 查询符合条件且未同步岗位
-    cursor.execute("SELECT id, title, company, location, applicants, link, description, status FROM jobs WHERE is_match=1")
+    cursor.execute("SELECT id, title, company, location, applicants, link, job_id, description, status FROM jobs WHERE is_match=1")
     jobs = cursor.fetchall()
 
-    def find_notion_page_by_link(link):
-        """用 Notion API 查找是否已有 link 的条目"""
+    def find_notion_page_by_job_id(job_id):
+        """用 Notion API 查找是否已有该 job_id 的条目"""
         query = {
             "filter": {
-                "property": "link",
-                "url": {
-                    "equals": link
+                "property": "job_id",
+                "rich_text": {
+                    "equals": job_id
                 }
             }
         }
@@ -35,12 +35,12 @@ def sync_jobs_to_notion():
         return None
 
     for job in jobs:
-        job_id, title, company, location, applicants, link, description, status = job
+        job_id, title, company, location, applicants, link, linkedin_job_id, description, status = job
         
         # 2. 检查是否已存在 Notion
-        existing_page = find_notion_page_by_link(link)
+        existing_page = find_notion_page_by_job_id(linkedin_job_id)
         if existing_page:
-            print(f"岗位 {title} 已存在 Notion，跳过")
+            print(f"岗位 {title} (ID: {linkedin_job_id}) 已存在 Notion，跳过")
             continue
         
         # 3. 新增岗位到 Notion
@@ -80,6 +80,7 @@ def sync_jobs_to_notion():
                 "地点": {"rich_text": [{"text": {"content": location}}]},
                 "申请人数": {"rich_text": [{"text": {"content": applicants or ""}}]},
                 "link": {"url": link},
+                "job_id": {"rich_text": [{"text": {"content": linkedin_job_id}}]},  # 新增：保存LinkedIn职位ID
                 "描述": {"rich_text": [{"text": {"content": description_text}}]},
                 # 你数据库字段对应的Notion字段，按需补充
             }

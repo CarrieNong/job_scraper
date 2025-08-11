@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 import re
 import time
 import random
+import sqlite3
 
 chrome_options = Options()
 # chrome_options.add_argument('--user-data-dir=/tmp/chrome_selenium_profile')
@@ -69,6 +70,30 @@ def find_title_and_link(job, driver, timeout: int = 10):
             continue
     return None, None, None
 
+def extract_job_id_from_url(url):
+    """
+    从LinkedIn职位详情URL中提取职位ID。
+    """
+    match = re.search(r'/jobs/view/(\d+)/', url)
+    if match:
+        return match.group(1)
+    return None
+
+def is_job_id_exists_in_db(job_id):
+    """
+    检查数据库中是否已存在该职位ID。
+    """
+    try:
+        conn = sqlite3.connect('jobs.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM jobs WHERE job_id = ?", (job_id,))
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count > 0
+    except Exception as e:
+        print(f"检查职位ID {job_id} 是否存在数据库时出错: {e}")
+        return False  # 出错时假设不存在，继续处理
+
 def scrape_jobs(driver, max_jobs=15):
     wait = WebDriverWait(driver, 15)
     
@@ -112,32 +137,31 @@ def scrape_jobs(driver, max_jobs=15):
         print(f"滚动最后一个职位时出错（忽略继续）: {e}")
 
     jobs_data = []
-    processed_links = set()  # 用于去重的链接集合
     print(f"找到 {len(job_list)} 个职位卡片，准备处理前 {min(max_jobs, len(job_list))} 个")
-
+    
     for index in range(min(max_jobs, len(job_list))):
         print(f"\n=== 开始处理第 {index+1} 个职位 ===")
         try:
             # 每次都重新获取职位列表，避免 stale element
             print(f"第 {index+1} 个职位：重新获取职位列表...")
-            # 优先使用更精确的职位选择器，避免抓到非职位项
-            current_job_list = driver.find_elements(By.CSS_SELECTOR, "li[data-occludable-job-id]") or \
-                               driver.find_elements(By.CSS_SELECTOR, ".scaffold-layout__list-item")
+            current_job_list = driver.find_elements(By.CSS_SELECTOR, ".scaffold-layout__list-item")
             if index >= len(current_job_list):
                 print(f"第 {index+1} 个职位：索引超出范围，跳过")
                 continue
                 
             job = current_job_list[index]
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", job)
+            # 等待 job 内部的 link 出现（虚拟列表渲染完成）
+            wait.until(EC.presence_of_element_located((
+                By.CSS_SELECTOR,
+                ".job-card-container__link"
+            )))
                 
             print(f"第 {index+1} 个职位：成功获取职位元素")
- 
+
             print(f"第 {index+1} 个职位：开始获取基本信息...")
-            link_el, title, href_value = find_title_and_link(job, driver)
-            if not link_el:
-                print(f"第 {index+1} 个职位：无法在该职位卡片内找到可点击链接，跳过")
-                continue
-            print(f"第 {index+1} 个职位：成功获取标题与链接: {title} | {href_value[:50]}...")
+            title = job.find_element(By.CSS_SELECTOR, ".job-card-container__link").get_attribute("aria-label")
+            print(f"第 {index+1} 个职位：成功获取标题: {title}")
             
             company = job.find_element(By.CSS_SELECTOR, ".artdeco-entity-lockup__subtitle span").text.strip()
             print(f"第 {index+1} 个职位：成功获取公司: {company}")
@@ -147,15 +171,26 @@ def scrape_jobs(driver, max_jobs=15):
             
             status = get_status(job)
             print(f"第 {index+1} 个职位：成功获取状态: {status}")
-
-            # 内存中去重检查
-            if href_value in processed_links:
-                print(f"第 {index+1} 个职位：链接已存在，跳过")
-                continue
             
-            # 新增：如果title包含angular、fullstack、backend、lead、staff则标记为不符合并直接保存（不点开详情）
-            if any(keyword in title.lower() for keyword in ['angular', 'fullstack', 'backend', 'lead', 'staff']):
-                print(f"第 {index+1} 个职位：标题包含angular/fullstack/backend/lead/staff，将以不符合保存")
+            href_value = job.find_element(By.CSS_SELECTOR, ".job-card-container__link").get_attribute("href")
+            print(f"第 {index+1} 个职位：成功获取链接: {href_value[:50]}...")
+
+            # 从链接中提取职位ID进行去重
+            job_id = extract_job_id_from_url(href_value)
+            if not job_id:
+                print(f"第 {index+1} 个职位：无法从链接中提取职位ID，跳过")
+                continue
+                
+            print(f"第 {index+1} 个职位：提取到职位ID: {job_id}")
+            
+            # 从数据库查询职位ID是否已存在
+            if is_job_id_exists_in_db(job_id):
+                print(f"第 {index+1} 个职位：职位ID {job_id} 在数据库中已存在，跳过")
+                continue
+
+            # 新增：如果title包含angular、fullstack、backend、lead、staff、Architect则标记为不符合并直接保存（不点开详情）
+            if any(keyword in title.lower() for keyword in ['angular', 'fullstack', 'full-stack', 'full stack', 'backend', 'lead','head', 'staff', 'architect', 'react native']):
+                print(f"第 {index+1} 个职位：标题包含angular/fullstack/backend/lead/staff/architect，将以不符合保存")
                 job_data = {
                     "title": title,
                     "company": company,
@@ -170,7 +205,6 @@ def scrape_jobs(driver, max_jobs=15):
                 }
                 if save_job(job_data):
                     jobs_data.append(job_data)
-                    processed_links.add(href_value)
                     print(f"第 {index+1} 个职位：不符合（标题黑名单），已保存")
                 # 友好延时
                 if random.random() < 0.3:
@@ -261,6 +295,7 @@ def scrape_jobs(driver, max_jobs=15):
                 "location": location,
                 "status": status,
                 "link": href_value,
+                "job_id": job_id,  # 新增：保存提取的职位ID
                 "applicants": apply_number,
                 "html": job_desc,
                 "description": job_desc_text,
@@ -270,7 +305,6 @@ def scrape_jobs(driver, max_jobs=15):
             
             if save_job(job_data):
                 jobs_data.append(job_data)
-                processed_links.add(href_value)  # 添加到已处理集合
                 print(f"第 {index+1} 个职位：已保存 (is_match={is_match})")
             
             # 偶尔添加"思考时间"模拟人类行为
@@ -331,5 +365,5 @@ def scrape_all_pages(driver, max_pages=10, max_jobs_per_page=30):
             print("未找到下一页按钮，结束。"); break
     return all_jobs
 
-jobs = scrape_all_pages(driver, max_pages=5, max_jobs_per_page=30)
+jobs = scrape_all_pages(driver, max_pages=1, max_jobs_per_page=30)
 print("共抓取到", len(jobs), "个职位")

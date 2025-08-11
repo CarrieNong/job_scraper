@@ -14,10 +14,11 @@ def init_db():
         location TEXT,
         applicants TEXT,
         link TEXT UNIQUE,
+        job_id TEXT,              -- 新增：LinkedIn职位ID
         description TEXT,
         html TEXT,
-        is_match INTEGER,             -- 1 符合, 0 不符合
-        reject_reason TEXT,           -- 不符合原因
+        is_match INTEGER,         -- 1 符合, 0 不符合
+        reject_reason TEXT,       -- 不符合原因
         status TEXT DEFAULT 'new',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
@@ -30,14 +31,15 @@ def save_job(job):
     cursor = conn.cursor()
     try:
         cursor.execute("""
-        INSERT INTO jobs (title, company, location, applicants, link, description, html, is_match, reject_reason, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO jobs (title, company, location, applicants, link, job_id, description, html, is_match, reject_reason, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             job.get('title', ''),
             job.get('company', ''),
             job.get('location', ''),
             job.get('applicants', ''),
             job.get('link', ''),
+            job.get('job_id', ''),  # 新增：职位ID
             job.get('description', ''),
             job.get('html', ''),
             1 if job.get('is_match', True) else 0,
