@@ -15,6 +15,7 @@ def init_db():
         applicants TEXT,
         link TEXT UNIQUE,
         description TEXT,
+        html TEXT,
         status TEXT DEFAULT 'new',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
@@ -27,8 +28,8 @@ def save_job(job):
     cursor = conn.cursor()
     try:
         cursor.execute("""
-        INSERT INTO jobs (title, company, location, applicants, link, description, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO jobs (title, company, location, applicants, link, description, html, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             job['title'],
             job['company'],
@@ -36,6 +37,7 @@ def save_job(job):
             job['applicants'],
             job['link'],
             job['description'],
+            job['html'],
             job['status']
         ))
         conn.commit()

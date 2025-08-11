@@ -7,6 +7,7 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException,
 from langdetect import detect
 from langdetect import detect_langs
 from db import save_job
+from bs4 import BeautifulSoup
 import re
 import time
 import random
@@ -160,7 +161,9 @@ def scrape_jobs(driver, max_jobs=15):
                 By.CSS_SELECTOR, 
                 ".jobs-box__html-content"
             ).get_attribute("innerHTML")
-            print(f"第 {index+1} 个职位：成功获取职位描述，长度: {len(job_desc)}")
+            soup = BeautifulSoup(job_desc, "html.parser")
+            job_desc_text = soup.get_text(separator=" ", strip=True)
+            print(f"第 {index+1} 个职位：成功获取职位描述，长度: {len(job_desc_text)}")
 
             # 在过滤条件之前打印职位和详情长度
             print(f"第 {index+1} 个职位：{title} | {company} | {location}")
@@ -202,7 +205,8 @@ def scrape_jobs(driver, max_jobs=15):
                 "status": status,
                 "link": href_value,
                 "applicants": apply_number,
-                "description": job_desc
+                "html": job_desc,
+                "description": job_desc_text
             }
             
             # 保存到数据库并更新内存中的已处理链接集合
