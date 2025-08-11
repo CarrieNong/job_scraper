@@ -46,9 +46,31 @@ def sync_jobs_to_notion():
         # 3. 新增岗位到 Notion
         # 处理描述字段，确保不超过 Notion 的 2000 字符限制
         description_text = description or ""
-        if len(description_text) > 2000:
-            description_text = description_text[:1997] + "..."  # 保留前1997字符 + "..."
-            print(f"岗位 {title} 的描述过长，已截断到2000字符")
+        original_length = len(description_text)
+        
+        print(f"岗位 {title} 的原始描述长度: {original_length} 字符")
+        
+        if original_length > 2000:
+            # 更严格的截断：预留更多空间给省略号
+            max_length = 1990  # 预留10个字符给省略号
+            description_text = description_text[:max_length] + "..."
+            print(f"岗位 {title} 的描述过长，已截断到 {len(description_text)} 字符")
+        
+        # 最终验证：如果还是超过2000，强制截断
+        final_length = len(description_text)
+        if final_length > 2000:
+            print(f"⚠️ 警告：岗位 {title} 的描述仍然过长 ({final_length} 字符)，强制截断")
+            # 强制截断到1990字符
+            description_text = description_text[:1990] + "..."
+            final_length = len(description_text)
+            print(f"强制截断后长度: {final_length} 字符")
+        
+        # 最终确认长度
+        if final_length > 2000:
+            print(f"❌ 错误：岗位 {title} 的描述长度仍然超过2000字符 ({final_length})，跳过此岗位")
+            continue
+        
+        print(f"岗位 {title} 的最终描述长度: {final_length} 字符")
         
         new_page = {
             "parent": {"database_id": DATABASE_ID},

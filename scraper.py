@@ -331,5 +331,5 @@ def scrape_all_pages(driver, max_pages=10, max_jobs_per_page=30):
             print("未找到下一页按钮，结束。"); break
     return all_jobs
 
-jobs = scrape_all_pages(driver, max_pages=1, max_jobs_per_page=30)
+jobs = scrape_all_pages(driver, max_pages=5, max_jobs_per_page=30)
 print("共抓取到", len(jobs), "个职位")
