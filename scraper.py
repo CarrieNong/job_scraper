@@ -103,21 +103,14 @@ def scrape_jobs(driver, max_jobs=15):
                 
             job = current_job_list[index]
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", job)
-            time.sleep(0.5)  # 等待渲染
+            # 等待 job 内部的 link 出现（虚拟列表渲染完成）
+            wait.until(EC.presence_of_element_located((
+                By.CSS_SELECTOR,
+                ".job-card-container__link"
+            )))
                 
             print(f"第 {index+1} 个职位：成功获取职位元素")
 
-            # 点击职位卡
-            print(f"第 {index+1} 个职位：开始点击职位卡片...")
-            job.click()
-            print(f"第 {index+1} 个职位：成功点击职位卡片")
-
-            # 等详情面板出现
-            print(f"第 {index+1} 个职位：等待详情面板加载...")
-            wait.until(EC.presence_of_element_located(
-                (By.CSS_SELECTOR, ".job-details-jobs-unified-top-card__tertiary-description-container")
-            ))
-            print(f"第 {index+1} 个职位：详情面板加载完成")
 
             print(f"第 {index+1} 个职位：开始获取基本信息...")
             title = job.find_element(By.CSS_SELECTOR, ".job-card-container__link").get_attribute("aria-label")
@@ -139,6 +132,18 @@ def scrape_jobs(driver, max_jobs=15):
             if href_value in processed_links:
                 print(f"第 {index+1} 个职位：链接已存在，跳过")
                 continue
+
+            # 点击职位卡
+            print(f"第 {index+1} 个职位：开始点击职位卡片...")
+            job.click()
+            print(f"第 {index+1} 个职位：成功点击职位卡片")
+
+            # 等详情面板出现
+            print(f"第 {index+1} 个职位：等待详情面板加载...")
+            wait.until(EC.presence_of_element_located(
+                (By.CSS_SELECTOR, ".job-details-jobs-unified-top-card__tertiary-description-container")
+            ))
+            print(f"第 {index+1} 个职位：详情面板加载完成")
 
             # 获取申请人数量
             print(f"第 {index+1} 个职位：开始获取申请人数...")
@@ -176,9 +181,9 @@ def scrape_jobs(driver, max_jobs=15):
                 print(f"第 {index+1} 个职位：英文概率 {en_prob} < 0.85，跳过")
                 continue  # 不满足阈值，跳过
 
-            # 新增：如果title包含angular则跳过
-            if 'angular' in title.lower():
-                print(f"第 {index+1} 个职位：标题包含angular，跳过")
+            # 新增：如果title包含angular、fullstack、backend则跳过
+            if any(keyword in title.lower() for keyword in ['angular', 'fullstack', 'backend']):
+                print(f"第 {index+1} 个职位：标题包含angular/fullstack/backend，跳过")
                 continue
 
             # 数字过滤，申请数量超过100的跳过
@@ -223,7 +228,7 @@ def scrape_jobs(driver, max_jobs=15):
     print(f"\n=== 职位处理完成，共成功处理 {len(jobs_data)} 个职位 ===")
     return jobs_data
 
-def scrape_all_pages(driver, max_pages=10, max_jobs_per_page=25):
+def scrape_all_pages(driver, max_pages=10, max_jobs_per_page=30):
     """
     自动翻页抓取职位数据，最多抓取 max_pages 页。
     每页最多抓取 max_jobs_per_page 条。
@@ -246,5 +251,5 @@ def scrape_all_pages(driver, max_pages=10, max_jobs_per_page=25):
             print("未找到下一页按钮，结束。"); break
     return all_jobs
 
-jobs = scrape_all_pages(driver, max_pages=1, max_jobs_per_page=25)
+jobs = scrape_all_pages(driver, max_pages=1, max_jobs_per_page=30)
 print("共抓取到", len(jobs), "个职位")
