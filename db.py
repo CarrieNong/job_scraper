@@ -36,12 +36,16 @@ def save_job(job):
             job['applicants'],
             job['link'],
             job['description'],
-            job['status']  # 新增status字段
+            job['status']
         ))
         conn.commit()
+        print(f"成功保存职位: {job['title']}")
+        return True
     except sqlite3.IntegrityError:
-        pass  # 链接重复，跳过
-    conn.close()
+        print(f"职位已存在，跳过: {job['title']}")
+        return False
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
     init_db()
