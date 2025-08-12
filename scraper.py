@@ -279,13 +279,13 @@ def scrape_jobs(driver, max_jobs=15):
                 else:
                     print(f"第 {index+1} 个职位：技术栈检测通过")
                     # 数字过滤，申请数量超过100的标记为不符合
-                    print(f"第 {index+1} 个职位：开始申请人数过滤...")
-                    nums = extract_numbers(apply_number)
-                    print(f"第 {index+1} 个职位：申请人数解析结果: {nums}")
-                    if nums and isinstance(nums[0], (int, float)) and nums[0] >= 100:
-                        is_match = False
-                        reject_reason = f"too_many_applicants:{nums[0]}"
-                        print(f"第 {index+1} 个职位：申请人数 {nums[0]} >= 100")
+                    # print(f"第 {index+1} 个职位：开始申请人数过滤...")
+                    # nums = extract_numbers(apply_number)
+                    # print(f"第 {index+1} 个职位：申请人数解析结果: {nums}")
+                    # if nums and isinstance(nums[0], (int, float)) and nums[0] >= 100:
+                    #     is_match = False
+                    #     reject_reason = f"too_many_applicants:{nums[0]}"
+                    #     print(f"第 {index+1} 个职位：申请人数 {nums[0]} >= 100")
 
             # 统一保存（无论是否符合）
             print(f"第 {index+1} 个职位：准备保存，is_match={is_match}, reject_reason='{reject_reason}'")
@@ -365,5 +365,5 @@ def scrape_all_pages(driver, max_pages=10, max_jobs_per_page=30):
             print("未找到下一页按钮，结束。"); break
     return all_jobs
 
-jobs = scrape_all_pages(driver, max_pages=1, max_jobs_per_page=30)
+jobs = scrape_all_pages(driver, max_pages=7, max_jobs_per_page=30)
 print("共抓取到", len(jobs), "个职位")
