@@ -94,7 +94,7 @@ def is_job_id_exists_in_db(job_id):
         print(f"检查职位ID {job_id} 是否存在数据库时出错: {e}")
         return False  # 出错时假设不存在，继续处理
 
-def scrape_jobs(driver, max_jobs=15):
+def scrape_jobs(driver, max_jobs=25):
     wait = WebDriverWait(driver, 15)
     
     # 先滚动页面加载更多职位
@@ -189,7 +189,7 @@ def scrape_jobs(driver, max_jobs=15):
                 continue
 
             # 新增：如果title包含angular、fullstack、backend、lead、staff、Architect则标记为不符合并直接保存（不点开详情）
-            if any(keyword in title.lower() for keyword in ['angular', 'fullstack', 'full-stack', 'full stack', 'backend', 'lead','head', 'staff', 'architect', 'react native']):
+            if any(keyword in title.lower() for keyword in ['angular', 'fullstack', 'full-stack', 'full stack', 'backend', 'lead','head', 'staff', 'architect', 'react native','manager']):
                 print(f"第 {index+1} 个职位：标题包含angular/fullstack/backend/lead/staff/architect，将以不符合保存")
                 job_data = {
                     "title": title,
@@ -297,8 +297,8 @@ def scrape_jobs(driver, max_jobs=15):
                 "link": href_value,
                 "job_id": job_id,  # 新增：保存提取的职位ID
                 "applicants": apply_number,
-                "html": job_desc,
-                "description": job_desc_text,
+                "html": job_desc if is_match else '',
+                "description": job_desc_text if is_match else '',
                 "is_match": is_match,
                 "reject_reason": reject_reason
             }
@@ -365,5 +365,5 @@ def scrape_all_pages(driver, max_pages=10, max_jobs_per_page=30):
             print("未找到下一页按钮，结束。"); break
     return all_jobs
 
-jobs = scrape_all_pages(driver, max_pages=7, max_jobs_per_page=30)
+jobs = scrape_all_pages(driver, max_pages=5, max_jobs_per_page=30)
 print("共抓取到", len(jobs), "个职位")
