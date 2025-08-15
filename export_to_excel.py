@@ -40,7 +40,12 @@ def export_jobs_to_excel():
     print(f"成功导出 {len(rows)} 个岗位到 {EXCEL_FILE}")
 
     # 标记已导出
-    cursor.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS exported INTEGER DEFAULT 0")
+    # 检查列是否存在
+    cursor.execute("PRAGMA table_info(jobs)")
+    columns = [info[1] for info in cursor.fetchall()]
+
+    if "exported" not in columns:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN exported INTEGER DEFAULT 0")
     cursor.execute("UPDATE jobs SET exported=1 WHERE is_match=1 AND (exported IS NULL OR exported=0)")
     conn.commit()
     conn.close()
