@@ -189,7 +189,9 @@ def scrape_jobs(driver, max_jobs=25):
                 continue
 
             # 新增：如果title包含angular、fullstack、backend、lead、staff、Architect则标记为不符合并直接保存（不点开详情）
-            if any(keyword in title.lower() for keyword in ['angular', 'fullstack', 'full-stack', 'full stack', 'backend', 'lead','head', 'staff', 'architect', 'react native','manager']):
+            if any(keyword in title.lower() for keyword in ['angular', 'backend', 'lead','head', 'staff', 'architect', 'react native','manager']) or (
+                "senior" in title.lower() and any(fs in title.lower() for fs in ["fullstack", "full-stack", "full stack"])
+            ):
                 print(f"第 {index+1} 个职位：标题包含angular/fullstack/backend/lead/staff/architect，将以不符合保存")
                 job_data = {
                     "title": title,
