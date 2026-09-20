@@ -1,6 +1,17 @@
+#!/usr/bin/env python3
+"""
+LinkedIn Job Scraper
+Scrapes job listings from LinkedIn and saves them to MongoDB
+"""
+import sys
+import os
 from urllib.parse import quote_plus
 import random
 import re
+
+# Add src directory to path to allow imports when running from project root
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright

@@ -1,10 +1,16 @@
+#!/usr/bin/env python3
 """
 AI-Powered Job Matching System
 Uses AI to analyze job listings and match them with user profile and preferences
 """
+import sys
 import os
 from datetime import datetime
 from typing import List, Dict, Optional
+
+# Add src directory to path to allow imports when running from project root
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -24,7 +30,7 @@ AI_API_KEY = os.getenv("OPENAI_API_KEY")  # or ANTHROPIC_API_KEY
 MATCH_THRESHOLD = float(os.getenv("MATCH_THRESHOLD", "7.0"))  # Minimum match score (0-10)
 
 
-def load_user_profile(profile_path: str = "user_profile.md") -> str:
+def load_user_profile(profile_path: str = "docs/user_profile.md") -> str:
     """
     Load user's resume and profile information.
     
@@ -42,7 +48,7 @@ def load_user_profile(profile_path: str = "user_profile.md") -> str:
         return ""
 
 
-def load_matching_criteria(criteria_path: str = "matching_criteria.txt") -> str:
+def load_matching_criteria(criteria_path: str = "docs/matching_criteria.md") -> str:
     """
     Load user's custom matching criteria and preferences.
     
@@ -246,7 +252,7 @@ def process_new_jobs(limit: Optional[int] = None, source: Optional[str] = None):
     # Load user data
     user_profile = load_user_profile()
     if not user_profile:
-        print("Error: No user profile found. Create user_profile.txt first.")
+        print("Error: No user profile found. Create docs/user_profile.md first.")
         return
     
     criteria = load_matching_criteria()
@@ -298,6 +304,8 @@ def process_new_jobs(limit: Optional[int] = None, source: Optional[str] = None):
 
 def main():
     """Main entry point for AI job matching."""
+    global MATCH_THRESHOLD
+    
     import argparse
     
     parser = argparse.ArgumentParser(description="AI-powered job matching system")
@@ -326,7 +334,6 @@ def main():
     args = parser.parse_args()
     
     # Override threshold if specified
-    global MATCH_THRESHOLD
     MATCH_THRESHOLD = args.threshold
     
     init_db()

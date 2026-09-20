@@ -35,19 +35,19 @@ cd "$PROJECT_DIR" || exit 1
 
 # 2. Run Indeed scraper
 log "Running Indeed scraper..."
-$PYTHON indeed_scraper.py --max-pages 2 || log "WARNING: Indeed scraper failed"
+$PYTHON src/indeed_scraper.py --max-pages 2 || log "WARNING: Indeed scraper failed"
 
 # 3. Run LinkedIn scraper
 log "Running LinkedIn scraper..."
-$PYTHON linkedin_scraper.py --max-pages 2 || log "WARNING: LinkedIn scraper failed"
+$PYTHON src/linkedin_scraper.py --max-pages 2 || log "WARNING: LinkedIn scraper failed"
 
 # 4. Run AI job matching
 log "Running AI job matching..."
-$PYTHON ai_matcher.py --threshold 7.0 || log "WARNING: AI matcher failed"
+$PYTHON src/ai_matcher.py --threshold 7.0 || log "WARNING: AI matcher failed"
 
 # 5. Optional: Sync to Notion (if you have this script)
 # log "Syncing to Notion..."
-# $PYTHON sync_to_notion.py || log "WARNING: Notion sync failed"
+# $PYTHON src/sync_to_notion.py || log "WARNING: Notion sync failed"
 
 # Cleanup: Close Chrome
 log "Closing Chrome..."

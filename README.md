@@ -1,195 +1,206 @@
-# Job Scraper
+# Job Scraper - AI-Powered Job Search Assistant
 
-A Python-based web scraper that automatically collects job listings from Indeed and LinkedIn, stores them in MongoDB, and helps you track job opportunities efficiently.
+An intelligent Python-based web scraper that automatically collects job listings from Indeed and LinkedIn, uses AI to analyze and match jobs to your profile, and helps you track opportunities efficiently.
 
-## 🚀 Features
+## ✨ Features
 
-- **Multi-Platform Support**: Scrapes job listings from both Indeed and LinkedIn
-- **AI-Powered Job Matching**: Uses OpenAI/Claude to analyze jobs and find the best matches for your profile
-- **Smart Deduplication**: Automatically detects and skips duplicate job postings using job IDs
-- **Human-Like Behavior**: Implements random delays and scrolling patterns to avoid detection
-- **MongoDB Integration**: Stores all job data in MongoDB with flexible querying capabilities
-- **Customizable Search**: Configure keywords, location, and time filters
-- **Browser Automation**: Uses Playwright with Chrome DevTools Protocol for reliable scraping
-- **Automated Scheduling**: Includes shell script for scheduled task execution
-- **Match Scoring**: AI scores each job (0-10) based on your profile and preferences
+- **Multi-Platform Scraping**: Automated job collection from Indeed and LinkedIn
+- **AI-Powered Matching**: Uses OpenAI/Claude to analyze jobs and score matches (0-10)
+- **Smart Deduplication**: Automatically detects and skips duplicate postings
+- **Human-Like Behavior**: Random delays and scrolling patterns to avoid detection
+- **MongoDB Integration**: Flexible storage and querying of job data
+- **Automated Scheduling**: Daily execution via LaunchD or Cron
+- **Match Analysis**: Provides match reasons, missing requirements, and red flags
 
 ## 📋 Prerequisites
 
 - Python 3.8+
 - Google Chrome browser
-- MongoDB (local or MongoDB Atlas cloud database)
+- MongoDB (local or MongoDB Atlas)
+- OpenAI API key (for AI matching)
 
-## 🛠 Installation
+## 🚀 Quick Start
 
-### 1. Clone the Repository
-
-```bash
-git clone <your-repo-url>
-cd job_scraper
-```
-
-### 2. Install Python Dependencies
+### 1. Install Dependencies
 
 ```bash
+cd /path/to/job_scraper
 pip install -r requirements.txt
-```
-
-### 3. Install Playwright Browsers
-
-```bash
 playwright install chromium
 ```
 
-### 4. Configure Environment Variables
+### 2. Configure Environment
 
 Create a `.env` file in the project root:
 
 ```bash
-# MongoDB configuration
+# MongoDB Configuration
 MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/?appName=Cluster0
-
-# Or use local MongoDB
-# MONGO_URI=mongodb://localhost:27017/
+# Or use local: mongodb://localhost:27017/
 
 # Optional: Database name (defaults to "job_scraper")
 # DB_NAME=job_scraper
 
 # AI Configuration (for job matching)
-OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_API_KEY=sk-proj-your_key_here
 AI_MODEL=gpt-4o-mini
 MATCH_THRESHOLD=7.0
 ```
 
 Get your OpenAI API key from: https://platform.openai.com/api-keys
 
-### 5. Set Up Your Profile (for AI Matching)
+### 3. Set Up Your Profile
 
-Edit `user_profile.md` (or `user_profile.txt`) with your resume and preferences:
+Edit `docs/user_profile.md` with your resume and preferences:
 
 ```markdown
 ## Personal Information
 - Name: Your Name
 - Current Role: Software Engineer
 - Years of Experience: 3+ years
-...
+- Location: Berlin, Germany
 
 ## Technical Skills
 - Frontend: React, Vue.js, TypeScript
 - Backend: Node.js, Python
-...
+- Database: MongoDB, PostgreSQL
+
+## Preferences
+- Work Style: Remote or hybrid
+- Company Size: Startups or scale-ups
 ```
 
-Edit `matching_criteria.txt` with your job requirements:
+Edit `docs/matching_criteria.md` with your job requirements:
 
-```text
+```markdown
 ## Must-Have Requirements
 1. Position involves React or modern frameworks
 2. Remote-friendly or Berlin-based
-...
+3. English-speaking environment
+
+## Strong Preferences
+1. Hybrid work option
+2. Modern tech stack
+3. Learning opportunities
+
+## Red Flags (Avoid)
+- No remote work options
+- Unpaid trial periods
+- Unclear compensation
 ```
 
-## ⚙️ Configuration
+### 4. Test Run
 
-Edit `config.py` to customize scraping parameters:
+```bash
+# Test Indeed scraper (1 page only)
+python3 src/indeed_scraper.py -k "frontend" -p 1
 
-```python
-# Search keywords
-DEFAULT_KEYWORDS = [
-    "frontend",
-    "full stack",
-    "ai engineer",
-    "software engineer",
-]
+# Test AI matching (3 jobs only)
+python3 src/ai_matcher.py -l 3
 
-# Scraping limits
-DEFAULT_MAX_PAGES = 3        # Pages per keyword
-MAX_JOBS_PER_PAGE = 30       # Jobs to process per page
-
-# Chrome debugging settings
-CDP_PORT = 9222              # Chrome DevTools Protocol port
+# View results
+python3 src/view_jobs.py --source indeed
 ```
 
-### Indeed Configuration
+### 5. Set Up Automation
 
-```python
-INDEED_CONFIG = {
-    "base_url": "https://de.indeed.com/jobs",
-    "fromage": "1",          # Posted within last 1 day
-    "results_per_page": 10,  # Results per page
-}
+Schedule daily execution:
+
+```bash
+# Copy LaunchD configuration
+cp com.user.job_scraper.plist ~/Library/LaunchAgents/
+
+# Load the schedule (runs daily at 9 AM)
+launchctl load ~/Library/LaunchAgents/com.user.job_scraper.plist
+
+# Test immediately
+launchctl start com.user.job_scraper
 ```
 
-### LinkedIn Configuration
+## 📁 Project Structure
 
-```python
-LINKEDIN_CONFIG = {
-    "base_url": "https://www.linkedin.com/jobs/search/",
-    "geo_id": "101282230",   # Germany
-    "time_filter": "r86400", # Last 24 hours
-}
+```
+job_scraper/
+├── src/                        # Python source files
+│   ├── ai_matcher.py          # AI-powered job matching engine
+│   ├── config.py              # Central configuration
+│   ├── db_mongo.py            # MongoDB operations
+│   ├── indeed_scraper.py      # Indeed scraper
+│   ├── linkedin_scraper.py    # LinkedIn scraper
+│   ├── scraper_utils.py       # Shared utility functions
+│   └── view_jobs.py           # View and query jobs
+├── docs/                       # Configuration & profile files
+│   ├── user_profile.md        # Your resume/profile (required for AI)
+│   └── matching_criteria.md   # Job matching criteria (required for AI)
+├── run_task.sh                # Automated execution script
+├── com.user.job_scraper.plist # macOS LaunchD configuration
+├── requirements.txt           # Python dependencies
+├── .env                       # Environment variables (not in git)
+├── .gitignore                 # Git ignore rules
+└── README.md                  # This file
 ```
 
 ## 🎯 Usage
 
-### 1. Scrape Job Listings
+### Scrape Job Listings
 
-#### Run Indeed Scraper
-
-```bash
-# Use default keywords and pages
-python3 indeed_scraper.py
-
-# Specify custom keywords
-python3 indeed_scraper.py --keywords "python developer" "data scientist"
-
-# Limit pages per keyword
-python3 indeed_scraper.py --max-pages 1
-
-# Combine options (recommended for testing)
-python3 indeed_scraper.py -k "frontend" -p 1
-```
-
-#### Run LinkedIn Scraper
+#### Indeed Scraper
 
 ```bash
 # Use default keywords and pages
-python3 linkedin_scraper.py
+python3 src/indeed_scraper.py
 
 # Specify custom keywords
-python3 linkedin_scraper.py --keywords "backend" "devops"
+python3 src/indeed_scraper.py --keywords "python developer" "data scientist"
 
 # Limit pages per keyword
-python3 linkedin_scraper.py --max-pages 2
+python3 src/indeed_scraper.py --max-pages 2
+
+# Combined options
+python3 src/indeed_scraper.py -k "frontend" -p 1
 ```
 
-### 2. AI Job Matching (NEW!)
+#### LinkedIn Scraper
 
-After scraping jobs, use AI to find the best matches:
+```bash
+# Use default keywords
+python3 src/linkedin_scraper.py
+
+# Specify custom keywords
+python3 src/linkedin_scraper.py --keywords "backend" "devops"
+
+# Limit pages per keyword
+python3 src/linkedin_scraper.py --max-pages 2
+```
+
+### AI Job Matching
+
+After scraping, use AI to find the best matches:
 
 ```bash
 # Analyze all new jobs
-python3 ai_matcher.py
+python3 src/ai_matcher.py
 
-# Test with a few jobs first
-python3 ai_matcher.py --limit 5
+# Test with limited jobs first
+python3 src/ai_matcher.py --limit 5
 
 # Only process Indeed jobs
-python3 ai_matcher.py --source indeed
+python3 src/ai_matcher.py --source indeed
 
 # Set custom match threshold (0-10)
-python3 ai_matcher.py --threshold 8.0
+python3 src/ai_matcher.py --threshold 8.0
+
+# Combined options
+python3 src/ai_matcher.py -s linkedin -t 7.5 -l 20
 ```
 
 The AI will:
 - Analyze each job against your profile
 - Score each job from 0-10
 - Save high-quality matches (≥7.0) to `matched_jobs` collection
-- Provide reasons for each match/rejection
+- Provide detailed reasons for each match/rejection
 
-**See [AI_MATCHING_GUIDE.md](AI_MATCHING_GUIDE.md) for detailed setup and usage.**
-
-### 3. Complete Pipeline
+### Complete Pipeline
 
 Run everything at once:
 
@@ -198,10 +209,11 @@ Run everything at once:
 ```
 
 This will:
-1. Scrape Indeed jobs
-2. Scrape LinkedIn jobs  
-3. Run AI matching on new jobs
-4. Log all results
+1. Start Chrome in debug mode
+2. Scrape Indeed jobs
+3. Scrape LinkedIn jobs
+4. Run AI matching on new jobs
+5. Log all results to `task.log`
 
 ### Command-Line Options
 
@@ -209,41 +221,9 @@ This will:
 |--------|-------|-------------|---------|
 | `--keywords` | `-k` | Search keywords (space-separated) | `DEFAULT_KEYWORDS` |
 | `--max-pages` | `-p` | Pages to scrape per keyword | `3` |
-
-### Examples
-
-```bash
-# Quick test - single keyword, one page
-python3 indeed_scraper.py -k "frontend" -p 1
-
-# Multiple keywords, 2 pages each
-python3 indeed_scraper.py -k "python" "javascript" "golang" -p 2
-
-# Use keywords with spaces
-python3 linkedin_scraper.py -k "machine learning" "ai engineer"
-```
-
-## 📁 Project Structure
-
-```
-job_scraper/
-├── config.py                      # Central configuration for all scrapers
-├── scraper_utils.py               # Shared utility functions
-├── db_mongo.py                    # MongoDB database operations
-├── indeed_scraper.py              # Indeed job scraper
-├── linkedin_scraper.py            # LinkedIn job scraper
-├── ai_matcher.py                  # AI-powered job matching (NEW!)
-├── user_profile.md                # Your resume/profile (NEW!)
-├── matching_criteria.txt          # Job matching criteria (NEW!)
-├── run_task.sh                    # Shell script for automated execution
-├── com.user.job_scraper.plist     # macOS LaunchD configuration
-├── requirements.txt               # Python dependencies
-├── .env                           # Environment variables (not in git)
-├── .gitignore                     # Git ignore rules
-├── README.md                      # This file
-├── AI_MATCHING_GUIDE.md           # Detailed AI matching guide (NEW!)
-└── SCHEDULING.md                  # Task scheduling guide (NEW!)
-```
+| `--limit` | `-l` | Limit number of jobs to process | All |
+| `--source` | `-s` | Filter by source (indeed/linkedin) | All |
+| `--threshold` | `-t` | Minimum match score to save | `7.0` |
 
 ## 🗄 Database Schema
 
@@ -266,7 +246,7 @@ All scraped jobs are stored here:
 }
 ```
 
-### Collection: `matched_jobs` (NEW!)
+### Collection: `matched_jobs`
 
 AI-analyzed jobs with high match scores:
 
@@ -299,10 +279,8 @@ AI-analyzed jobs with high match scores:
 
 ### Query Jobs
 
-Use the MongoDB client or `db_mongo.py` functions:
-
 ```python
-from db_mongo import init_db, get_jobs_by_source, count_jobs, get_collection
+from src.db_mongo import init_db, get_jobs_by_source, get_collection
 
 # Initialize database connection
 init_db()
@@ -310,19 +288,22 @@ init_db()
 # Get all Indeed jobs
 indeed_jobs = get_jobs_by_source("indeed")
 
-# Count jobs by source
-count = count_jobs("linkedin")
-
 # Get matched jobs sorted by score
 matched = get_collection("matched_jobs")
 best_matches = matched.find().sort("match_score", -1).limit(10)
+
+# View matches
+for job in best_matches:
+    print(f"{job['match_score']}/10 - {job['title']} at {job['company']}")
+    print(f"  Link: {job['link']}")
+    print(f"  Reasons: {', '.join(job['match_reasons'])}\n")
 ```
 
 ## 🤖 Automated Scheduling
 
-Schedule the complete pipeline to run daily:
+### LaunchD Setup (macOS - Recommended)
 
-### Quick Setup (macOS LaunchD - Recommended)
+LaunchD is the native macOS scheduling system and is more reliable than cron.
 
 ```bash
 # 1. Copy the plist file
@@ -333,26 +314,279 @@ launchctl load ~/Library/LaunchAgents/com.user.job_scraper.plist
 
 # 3. Test immediately
 launchctl start com.user.job_scraper
+
+# 4. Verify it's loaded
+launchctl list | grep job_scraper
 ```
 
-### Alternative: Cron
+#### Customize Schedule
+
+Edit `com.user.job_scraper.plist` to change the time:
+
+```xml
+<!-- Run every day at 9:00 AM -->
+<key>StartCalendarInterval</key>
+<dict>
+    <key>Hour</key>
+    <integer>9</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+</dict>
+```
+
+For multiple times per day:
+
+```xml
+<key>StartCalendarInterval</key>
+<array>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <dict>
+        <key>Hour</key>
+        <integer>18</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+</array>
+```
+
+Then reload:
 
 ```bash
-# Edit crontab
-crontab -e
-
-# Add this line (runs daily at 9 AM)
-0 9 * * * /path/to/job_scraper/run_task.sh >> /path/to/job_scraper/cron.log 2>&1
+launchctl unload ~/Library/LaunchAgents/com.user.job_scraper.plist
+launchctl load ~/Library/LaunchAgents/com.user.job_scraper.plist
 ```
 
-The automated pipeline will:
-1. Start Chrome in debug mode
-2. Scrape Indeed jobs
-3. Scrape LinkedIn jobs
-4. **Run AI matching on new jobs**
-5. Log all results to `task.log`
+#### Management Commands
 
-**See [SCHEDULING.md](SCHEDULING.md) for detailed scheduling setup, troubleshooting, and customization options.**
+```bash
+# Start the job immediately
+launchctl start com.user.job_scraper
+
+# Stop the scheduled job
+launchctl stop com.user.job_scraper
+
+# Unload (disable) the job
+launchctl unload ~/Library/LaunchAgents/com.user.job_scraper.plist
+```
+
+#### Check Logs
+
+```bash
+# View standard output
+tail -f stdout.log
+
+# View errors
+tail -f stderr.log
+
+# View task log
+tail -f task.log
+```
+
+### Cron Setup (Alternative)
+
+Cron is the traditional Unix scheduler.
+
+1. **Give cron Full Disk Access** (macOS Catalina+)
+   - System Preferences → Security & Privacy → Privacy
+   - Select "Full Disk Access"
+   - Add `/usr/sbin/cron`
+
+2. **Edit crontab**
+   
+   ```bash
+   crontab -e
+   ```
+
+3. **Add the schedule** (runs daily at 9 AM)
+   
+   ```cron
+   0 9 * * * /path/to/job_scraper/run_task.sh >> /path/to/job_scraper/cron.log 2>&1
+   ```
+
+#### Cron Examples
+
+```cron
+# Every day at 9 AM
+0 9 * * * /path/to/run_task.sh
+
+# Every day at 9 AM and 6 PM
+0 9,18 * * * /path/to/run_task.sh
+
+# Every weekday (Mon-Fri) at 9 AM
+0 9 * * 1-5 /path/to/run_task.sh
+
+# Every 6 hours
+0 */6 * * * /path/to/run_task.sh
+```
+
+## 🎓 AI Matching Guide
+
+### Understanding Match Scores
+
+- **9-10**: Excellent match - Apply immediately
+- **7-8**: Good match - Strongly consider
+- **4-6**: Moderate match - Review carefully
+- **0-3**: Poor match - Not saved by default
+
+### Cost Estimation
+
+**OpenAI Pricing (as of 2024):**
+
+- **GPT-4o-mini** (recommended):
+  - ~$0.15 per 1M input tokens, ~$0.60 per 1M output tokens
+  - Typical cost: $0.001-0.003 per job
+  - **100 jobs ≈ $0.10-0.30**
+
+- **GPT-4o**:
+  - ~$2.50 per 1M input tokens, ~$10.00 per 1M output tokens
+  - Typical cost: $0.02-0.05 per job
+  - **100 jobs ≈ $2-5**
+
+💡 **Tip**: Start with `gpt-4o-mini` for testing, then upgrade if needed.
+
+### Customization
+
+#### Adjust Match Threshold
+
+In `.env`:
+```bash
+# Only save excellent matches
+MATCH_THRESHOLD=8.5
+
+# Save more matches for review
+MATCH_THRESHOLD=6.0
+```
+
+#### Modify AI Prompt
+
+Edit `src/ai_matcher.py` → `build_matching_prompt()` to customize:
+- Scoring criteria
+- Analysis format
+- Specific requirements to check
+
+#### Use Different AI Provider
+
+For Claude (Anthropic):
+
+1. Install SDK:
+   ```bash
+   pip install anthropic
+   ```
+
+2. Update `.env`:
+   ```bash
+   ANTHROPIC_API_KEY=sk-ant-xxxxx
+   AI_MODEL=claude-3-5-sonnet-20241022
+   ```
+
+3. Modify `src/ai_matcher.py` to use Anthropic client
+
+### Best Practices
+
+1. **Test with small batches first**
+   ```bash
+   python3 src/ai_matcher.py --limit 3
+   ```
+
+2. **Review AI recommendations**
+   - Don't blindly trust scores
+   - Read the match_reasons and red_flags
+   - Adjust criteria if results are off
+
+3. **Refine your profile**
+   - Update `docs/user_profile.md` with specific skills
+   - Be clear about must-haves in `docs/matching_criteria.md`
+   - Add examples of ideal job descriptions
+
+4. **Monitor costs**
+   - Check OpenAI usage dashboard
+   - Start with `gpt-4o-mini`
+   - Set budgets in OpenAI account settings
+
+5. **Iterate on criteria**
+   - If too many false positives, increase threshold
+   - If missing good jobs, lower threshold or refine criteria
+   - Adjust prompt for better results
+
+### Workflow Integration
+
+After matching, update job status:
+
+```python
+from src.db_mongo import get_collection
+from datetime import datetime
+
+matched = get_collection("matched_jobs")
+matched.update_one(
+    {"job_id": "123456", "source": "linkedin"},
+    {
+        "$set": {
+            "status": "applied",
+            "applied_at": datetime.utcnow(),
+            "notes": "Applied via LinkedIn, mentioned referral"
+        }
+    }
+)
+```
+
+## ⚙️ Configuration
+
+### Search Keywords
+
+Edit `src/config.py`:
+
+```python
+DEFAULT_KEYWORDS = [
+    "frontend developer",
+    "react developer",
+    "full stack engineer",
+    "software engineer",
+]
+```
+
+### Scraping Limits
+
+```python
+DEFAULT_MAX_PAGES = 3        # Pages per keyword
+MAX_JOBS_PER_PAGE = 30       # Jobs to process per page
+CDP_PORT = 9222              # Chrome DevTools Protocol port
+```
+
+### Indeed Configuration
+
+```python
+INDEED_CONFIG = {
+    "base_url": "https://de.indeed.com/jobs",
+    "fromage": "1",          # Posted within last 1 day
+    "results_per_page": 10,
+    "selectors": {
+        "job_card": ".mainContentTable",
+        "job_title": "h3.jobTitle",
+        "company_name": ".companyName",
+        # ... more selectors
+    }
+}
+```
+
+### LinkedIn Configuration
+
+```python
+LINKEDIN_CONFIG = {
+    "base_url": "https://www.linkedin.com/jobs/search/",
+    "geo_id": "101282230",   # Germany
+    "time_filter": "r86400", # Last 24 hours
+    "selectors": {
+        "job_card": ".job-search-card",
+        "job_title": ".base-search-card__title",
+        # ... more selectors
+    }
+}
+```
 
 ## ⚠️ Important Notes
 
@@ -376,9 +610,10 @@ The scraper includes built-in delays to mimic human behavior:
 - **Rate Limiting**: The built-in delays help prevent server overload
 - **Personal Use**: This tool is intended for personal job search assistance
 
-### Troubleshooting
+## 🐛 Troubleshooting
 
-**Chrome connection fails:**
+### Chrome connection fails
+
 ```bash
 # Manually start Chrome with debugging
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
@@ -386,16 +621,59 @@ The scraper includes built-in delays to mimic human behavior:
   --user-data-dir="/tmp/chrome_selenium"
 ```
 
-**MongoDB connection issues:**
+### MongoDB connection issues
+
 - Verify your `MONGO_URI` in `.env`
 - Check network connectivity to MongoDB Atlas
 - Ensure your IP is whitelisted in MongoDB Atlas
 
-**Playwright errors:**
+### Playwright errors
+
 ```bash
 # Reinstall Playwright browsers
 playwright install --force chromium
 ```
+
+### AI API key errors
+
+```
+Error: AI API key not configured
+```
+
+- Check `.env` file exists
+- Verify `OPENAI_API_KEY` is set
+- Make sure there are no extra spaces or quotes
+- Verify the API key is valid at https://platform.openai.com/api-keys
+
+### No new jobs to process
+
+```
+No new jobs to process.
+```
+
+- All jobs may have been processed already
+- Run scrapers first: `python3 src/indeed_scraper.py`
+- Check database: all jobs with status="new" will be processed
+
+### LaunchD not working
+
+```bash
+# Check if loaded
+launchctl list | grep job_scraper
+
+# View detailed status
+launchctl print gui/$(id -u)/com.user.job_scraper
+
+# Check system logs
+log show --predicate 'process == "launchd"' --last 1h | grep job_scraper
+```
+
+### High API costs
+
+- Use `gpt-4o-mini` instead of `gpt-4o`
+- Set higher threshold to analyze fewer jobs
+- Use `--limit` to control batch size
+- Reduce job description length in prompt
 
 ## 🔧 Development
 
@@ -416,7 +694,7 @@ job_data = {
 
 ### Add New Selectors
 
-Update `config.py` with new CSS selectors:
+Update `src/config.py` with new CSS selectors:
 
 ```python
 INDEED_CONFIG = {
@@ -427,6 +705,33 @@ INDEED_CONFIG = {
         "company_name": ".companyName",
     }
 }
+```
+
+### Add Notifications (Optional)
+
+#### macOS Notification
+
+Install `terminal-notifier`:
+
+```bash
+brew install terminal-notifier
+```
+
+Add to the end of `run_task.sh`:
+
+```bash
+terminal-notifier -title "Job Scraper" \
+  -message "Daily job scraping completed" \
+  -sound default
+```
+
+#### Email Notification
+
+Configure mail and add to `run_task.sh`:
+
+```bash
+echo "Job scraper completed at $(date)" | \
+  mail -s "Job Scraper Report" your_email@example.com
 ```
 
 ## 📝 License
@@ -441,10 +746,12 @@ Contributions are welcome! Please:
 3. Make your changes
 4. Submit a pull request
 
-## 📧 Contact
+## 📧 Support
 
 For questions or issues, please open an issue in the repository.
 
 ---
 
 **Disclaimer**: This tool is intended for personal job search assistance. Users are responsible for ensuring their use complies with applicable laws and website terms of service.
+
+**Note**: All comments in the codebase are in English for better collaboration and maintenance.
