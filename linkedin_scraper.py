@@ -18,6 +18,7 @@ from scraper_utils import (
 )
 
 # LinkedIn configuration
+BASE_URL = LINKEDIN_CONFIG["base_url"]
 GEO_ID = LINKEDIN_CONFIG["geo_id"]
 TIME_FILTER = LINKEDIN_CONFIG["time_filter"]
 SOURCE = LINKEDIN_CONFIG["source"]
@@ -62,7 +63,7 @@ def jobs_search_url(keyword):
     """
     encoded = quote_plus(keyword)
     return (
-        "https://www.linkedin.com/jobs/search/"
+        f"{BASE_URL}"
         f"?keywords={encoded}&f_TPR={TIME_FILTER}&geoId={GEO_ID}"
         "&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true"
     )

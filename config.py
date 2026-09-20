@@ -47,6 +47,7 @@ INDEED_CONFIG = {
 # ===== LinkedIn Platform Configuration =====
 LINKEDIN_CONFIG = {
     "source": "linkedin",
+    "base_url": "https://www.linkedin.com/jobs/search/",
     "geo_id": "101282230",  # Germany
     "time_filter": "r86400",  # Last 24 hours
     
