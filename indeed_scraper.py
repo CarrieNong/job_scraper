@@ -1,48 +1,46 @@
 from urllib.parse import quote_plus
-import argparse
 import random
-import socket
-import subprocess
-import time
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
-
+    
 from db_mongo import init_db, save_job, is_job_id_exists
 from config import (
-    DEFAULT_KEYWORDS,
-    DEFAULT_MAX_PAGES,
     MAX_JOBS_PER_PAGE,
-    CDP_HOST,
-    CDP_PORT,
-    CDP_URL,
-    CHROME_BIN,
-    CHROME_USER_DATA_DIR,
     INDEED_CONFIG,
 )
+from scraper_utils import (
+    pause,
+    safe_text,
+    safe_attr,
+    parse_args,
+    connect_browser,
+)
 
-# Indeed 配置
+# Indeed configuration
 BASE_URL = INDEED_CONFIG["base_url"]
 FROMAGE = INDEED_CONFIG["fromage"]
 SOURCE = INDEED_CONFIG["source"]
 RESULTS_PER_PAGE = INDEED_CONFIG["results_per_page"]
 
-# Indeed 选择器
+# Indeed selectors
 JOB_CARD_SELECTOR = INDEED_CONFIG["selectors"]["job_card"]
 JOB_TITLE_SELECTOR = INDEED_CONFIG["selectors"]["job_title"]
 DETAIL_SELECTOR = INDEED_CONFIG["selectors"]["detail"]
 
 
-def pause(min_seconds, max_seconds, message=None):
-    """Sleep a random interval to look less like a bot."""
-    delay = random.uniform(min_seconds, max_seconds)
-    if message:
-        print(f"{message} ({delay:.1f}s)")
-    time.sleep(delay)
-
-
 
 def jobs_search_url(keyword, start=0):
+    """
+    Build Indeed search URL for a given keyword and pagination offset.
+    
+    Args:
+        keyword: Search keyword
+        start: Job offset for pagination
+        
+    Returns:
+        Full search URL
+    """
     encoded = quote_plus(keyword)
     url = f"{BASE_URL}?q={encoded}&l=&fromage={FROMAGE}&from=searchOnDesktopSerp"
     if start > 0:
@@ -70,45 +68,16 @@ def dismiss_overlays(page):
             continue
 
 
-def safe_text(locator, timeout=3000):
-    try:
-        if locator.count() == 0:
-            return ""
-        return (locator.first.inner_text(timeout=timeout) or "").strip()
-    except Exception:
-        return ""
-
-
-def safe_attr(locator, name, timeout=3000):
-    try:
-        if locator.count() == 0:
-            return ""
-        return locator.first.get_attribute(name, timeout=timeout) or ""
-    except Exception:
-        return ""
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Scrape Indeed DE jobs into SQLite.")
-    parser.add_argument(
-        "--keywords",
-        "-k",
-        nargs="+",
-        default=DEFAULT_KEYWORDS,
-        help='Search keywords. Example: -k frontend "full stack" "ai engineer"',
-    )
-    parser.add_argument(
-        "--max-pages",
-        "-p",
-        type=int,
-        default=DEFAULT_MAX_PAGES,
-        help="How many result pages to scrape per keyword.",
-    )
-    return parser.parse_args()
-
-
 def extract_card_fields(card):
-    """Read title and job_id from an Indeed result card."""
+    """
+    Extract title, job_id, and URL from an Indeed job card.
+    
+    Args:
+        card: Playwright locator for a job card element
+        
+    Returns:
+        Tuple of (title, job_id, href)
+    """
     title_heading = card.locator(JOB_TITLE_SELECTOR).first
     title = safe_text(title_heading.locator("span"))
     if not title:
@@ -128,6 +97,16 @@ def extract_card_fields(card):
 
 
 def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
+    """
+    Scrape job listings from the current Indeed search results page.
+    
+    Args:
+        page: Playwright page object
+        max_jobs: Maximum number of jobs to process per page
+        
+    Returns:
+        List of job data dictionaries that were successfully saved
+    """
     page.wait_for_selector(JOB_CARD_SELECTOR, timeout=15000)
     total_cards = page.locator(JOB_CARD_SELECTOR).count()
     limit = min(max_jobs, total_cards)
@@ -195,7 +174,19 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
     return jobs_data
 
 
-def scrape_keyword(page, keyword, max_pages=DEFAULT_MAX_PAGES, max_jobs_per_page=MAX_JOBS_PER_PAGE):
+def scrape_keyword(page, keyword, max_pages, max_jobs_per_page=MAX_JOBS_PER_PAGE):
+    """
+    Scrape multiple pages of Indeed results for a single keyword.
+    
+    Args:
+        page: Playwright page object
+        keyword: Search keyword
+        max_pages: Maximum number of pages to scrape
+        max_jobs_per_page: Maximum jobs to process per page
+        
+    Returns:
+        List of all job data dictionaries saved for this keyword
+    """
     print(f"\n========== Keyword: {keyword} ==========")
     all_jobs = []
 
@@ -221,60 +212,6 @@ def scrape_keyword(page, keyword, max_pages=DEFAULT_MAX_PAGES, max_jobs_per_page
     return all_jobs
 
 
-def is_cdp_open():
-    try:
-        with socket.create_connection((CDP_HOST, CDP_PORT), timeout=1):
-            return True
-    except OSError:
-        return False
-
-
-def start_debug_chrome():
-    """Launch a separate Chrome with remote debugging."""
-    print(
-        f"Nothing is listening on {CDP_URL}. "
-        "Starting Chrome with remote debugging..."
-    )
-    subprocess.Popen(
-        [
-            CHROME_BIN,
-            f"--remote-debugging-port={CDP_PORT}",
-            f"--user-data-dir={CHROME_USER_DATA_DIR}",
-            "--no-first-run",
-            "--no-default-browser-check",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    for _ in range(20):
-        if is_cdp_open():
-            print("Chrome remote debugging is ready.")
-            return
-        time.sleep(0.5)
-    raise RuntimeError(
-        f"Could not connect to {CDP_URL}. Start Chrome yourself with:\n"
-        f'  "{CHROME_BIN}" --remote-debugging-port={CDP_PORT} '
-        f'--user-data-dir="{CHROME_USER_DATA_DIR}"\n'
-        "Open Indeed in that window if needed, then run indeed_scraper.py again."
-    )
-
-
-def connect_browser(playwright):
-    if not is_cdp_open():
-        start_debug_chrome()
-    try:
-        browser = playwright.chromium.connect_over_cdp(CDP_URL)
-    except Exception as e:
-        raise RuntimeError(
-            f"Playwright could not attach to Chrome at {CDP_URL}: {e}\n"
-            "If a normal Chrome is already open, this debug instance must use "
-            f"--user-data-dir={CHROME_USER_DATA_DIR}."
-        ) from e
-    if not browser.contexts:
-        raise RuntimeError("Chrome opened, but no browser context was found.")
-    return browser
-
-
 def main():
     args = parse_args()
     keywords = args.keywords
@@ -287,13 +224,13 @@ def main():
     all_jobs = []
 
     with sync_playwright() as playwright:
-        browser = connect_browser(playwright)
+        browser = connect_browser(playwright, "Indeed")
         context = browser.contexts[0]
         page = context.pages[0] if context.pages else context.new_page()
         print("Use the debug Chrome window. Dismiss Indeed cookie banners if prompted.")
 
         for i, keyword in enumerate(keywords):
-            jobs = scrape_keyword(page, keyword, max_pages=max_pages)
+            jobs = scrape_keyword(page, keyword, max_pages)
             all_jobs.extend(jobs)
             if i < len(keywords) - 1:
                 pause(15, 30, "Rest between keywords")
