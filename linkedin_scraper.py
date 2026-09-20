@@ -10,22 +10,26 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 from db_mongo import init_db, save_job, is_job_id_exists
+from config import (
+    DEFAULT_KEYWORDS,
+    DEFAULT_MAX_PAGES,
+    MAX_JOBS_PER_PAGE,
+    CDP_HOST,
+    CDP_PORT,
+    CDP_URL,
+    CHROME_BIN,
+    CHROME_USER_DATA_DIR,
+    LINKEDIN_CONFIG,
+)
 
-CDP_HOST = "127.0.0.1"
-CDP_PORT = 9222
-CDP_URL = f"http://{CDP_HOST}:{CDP_PORT}"
-CHROME_BIN = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-CHROME_USER_DATA_DIR = "/tmp/chrome_selenium"
+# LinkedIn 配置
+GEO_ID = LINKEDIN_CONFIG["geo_id"]
+TIME_FILTER = LINKEDIN_CONFIG["time_filter"]
+SOURCE = LINKEDIN_CONFIG["source"]
 
-# Search filters: Germany + posted in the last 24 hours
-GEO_ID = "101282230"
-TIME_FILTER = "r86400"
-DEFAULT_KEYWORDS = ["frontend", "full stack","full-stack","fullstack", "ai engineer", "product engineer", "software engineer"]
-DEFAULT_MAX_PAGES = 3
-MAX_JOBS_PER_PAGE = 30
-SOURCE = "linkedin"
-JOB_CARD_SELECTOR = ".scaffold-layout__list-item"
-JOB_LINK_SELECTOR = "a.job-card-container__link"
+# LinkedIn 选择器
+JOB_CARD_SELECTOR = LINKEDIN_CONFIG["selectors"]["job_card"]
+JOB_LINK_SELECTOR = LINKEDIN_CONFIG["selectors"]["job_link"]
 
 
 def pause(min_seconds, max_seconds, message=None):

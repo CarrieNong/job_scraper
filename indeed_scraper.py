@@ -9,33 +9,28 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 from db_mongo import init_db, save_job, is_job_id_exists
+from config import (
+    DEFAULT_KEYWORDS,
+    DEFAULT_MAX_PAGES,
+    MAX_JOBS_PER_PAGE,
+    CDP_HOST,
+    CDP_PORT,
+    CDP_URL,
+    CHROME_BIN,
+    CHROME_USER_DATA_DIR,
+    INDEED_CONFIG,
+)
 
-CDP_HOST = "127.0.0.1"
-CDP_PORT = 9222
-CDP_URL = f"http://{CDP_HOST}:{CDP_PORT}"
-CHROME_BIN = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-CHROME_USER_DATA_DIR = "/tmp/chrome_selenium"
+# Indeed 配置
+BASE_URL = INDEED_CONFIG["base_url"]
+FROMAGE = INDEED_CONFIG["fromage"]
+SOURCE = INDEED_CONFIG["source"]
+RESULTS_PER_PAGE = INDEED_CONFIG["results_per_page"]
 
-# de.indeed.com, posted within the last day (fromage=1).
-BASE_URL = "https://de.indeed.com/jobs"
-FROMAGE = "1"
-DEFAULT_KEYWORDS = [
-    "frontend",
-    "full stack",
-    "full-stack",
-    "fullstack",
-    "ai engineer",
-    "product engineer",
-    "software engineer",
-]
-DEFAULT_MAX_PAGES = 3
-MAX_JOBS_PER_PAGE = 30
-SOURCE = "indeed"
-JOB_CARD_SELECTOR = ".mainContentTable"
-JOB_TITLE_SELECTOR = "h3.jobTitle"
-DETAIL_SELECTOR = '[data-testid="viewjob-main-content"]'
-# Indeed SERP uses start=0, 10, 20, ...
-RESULTS_PER_PAGE = 10
+# Indeed 选择器
+JOB_CARD_SELECTOR = INDEED_CONFIG["selectors"]["job_card"]
+JOB_TITLE_SELECTOR = INDEED_CONFIG["selectors"]["job_title"]
+DETAIL_SELECTOR = INDEED_CONFIG["selectors"]["detail"]
 
 
 def pause(min_seconds, max_seconds, message=None):
