@@ -1,3 +1,36 @@
+__pycache__
+.DS_Store
 .env
-jobs_export.xlsx
-jobs.db
+
+# Logs
+*.log
+stdout.log
+stderr.log
+task.log
+cron.log
+
+# Chrome user data
+/tmp/chrome_selenium
+
+# User-specific files (contain personal info)
+user_profile.txt
+user_profile.md
+matching_criteria.txt
+
+# Python
+*.pyc
+*.pyo
+*.egg-info
+dist/
+build/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# MongoDB dumps
+dump/

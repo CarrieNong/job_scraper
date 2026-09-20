@@ -5,12 +5,14 @@ A Python-based web scraper that automatically collects job listings from Indeed 
 ## 🚀 Features
 
 - **Multi-Platform Support**: Scrapes job listings from both Indeed and LinkedIn
+- **AI-Powered Job Matching**: Uses OpenAI/Claude to analyze jobs and find the best matches for your profile
 - **Smart Deduplication**: Automatically detects and skips duplicate job postings using job IDs
 - **Human-Like Behavior**: Implements random delays and scrolling patterns to avoid detection
 - **MongoDB Integration**: Stores all job data in MongoDB with flexible querying capabilities
 - **Customizable Search**: Configure keywords, location, and time filters
 - **Browser Automation**: Uses Playwright with Chrome DevTools Protocol for reliable scraping
 - **Automated Scheduling**: Includes shell script for scheduled task execution
+- **Match Scoring**: AI scores each job (0-10) based on your profile and preferences
 
 ## 📋 Prerequisites
 
@@ -52,6 +54,39 @@ MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/?appName=Cluster0
 
 # Optional: Database name (defaults to "job_scraper")
 # DB_NAME=job_scraper
+
+# AI Configuration (for job matching)
+OPENAI_API_KEY=your_openai_api_key_here
+AI_MODEL=gpt-4o-mini
+MATCH_THRESHOLD=7.0
+```
+
+Get your OpenAI API key from: https://platform.openai.com/api-keys
+
+### 5. Set Up Your Profile (for AI Matching)
+
+Edit `user_profile.md` (or `user_profile.txt`) with your resume and preferences:
+
+```markdown
+## Personal Information
+- Name: Your Name
+- Current Role: Software Engineer
+- Years of Experience: 3+ years
+...
+
+## Technical Skills
+- Frontend: React, Vue.js, TypeScript
+- Backend: Node.js, Python
+...
+```
+
+Edit `matching_criteria.txt` with your job requirements:
+
+```text
+## Must-Have Requirements
+1. Position involves React or modern frameworks
+2. Remote-friendly or Berlin-based
+...
 ```
 
 ## ⚙️ Configuration
@@ -97,7 +132,9 @@ LINKEDIN_CONFIG = {
 
 ## 🎯 Usage
 
-### Run Indeed Scraper
+### 1. Scrape Job Listings
+
+#### Run Indeed Scraper
 
 ```bash
 # Use default keywords and pages
@@ -113,7 +150,7 @@ python3 indeed_scraper.py --max-pages 1
 python3 indeed_scraper.py -k "frontend" -p 1
 ```
 
-### Run LinkedIn Scraper
+#### Run LinkedIn Scraper
 
 ```bash
 # Use default keywords and pages
@@ -125,6 +162,46 @@ python3 linkedin_scraper.py --keywords "backend" "devops"
 # Limit pages per keyword
 python3 linkedin_scraper.py --max-pages 2
 ```
+
+### 2. AI Job Matching (NEW!)
+
+After scraping jobs, use AI to find the best matches:
+
+```bash
+# Analyze all new jobs
+python3 ai_matcher.py
+
+# Test with a few jobs first
+python3 ai_matcher.py --limit 5
+
+# Only process Indeed jobs
+python3 ai_matcher.py --source indeed
+
+# Set custom match threshold (0-10)
+python3 ai_matcher.py --threshold 8.0
+```
+
+The AI will:
+- Analyze each job against your profile
+- Score each job from 0-10
+- Save high-quality matches (≥7.0) to `matched_jobs` collection
+- Provide reasons for each match/rejection
+
+**See [AI_MATCHING_GUIDE.md](AI_MATCHING_GUIDE.md) for detailed setup and usage.**
+
+### 3. Complete Pipeline
+
+Run everything at once:
+
+```bash
+./run_task.sh
+```
+
+This will:
+1. Scrape Indeed jobs
+2. Scrape LinkedIn jobs  
+3. Run AI matching on new jobs
+4. Log all results
 
 ### Command-Line Options
 
@@ -150,20 +227,29 @@ python3 linkedin_scraper.py -k "machine learning" "ai engineer"
 
 ```
 job_scraper/
-├── config.py              # Central configuration for all scrapers
-├── scraper_utils.py       # Shared utility functions
-├── db_mongo.py            # MongoDB database operations
-├── indeed_scraper.py      # Indeed job scraper
-├── linkedin_scraper.py    # LinkedIn job scraper
-├── run_task.sh            # Shell script for automated execution
-├── requirements.txt       # Python dependencies
-├── .env                   # Environment variables (not in git)
-└── .gitignore            # Git ignore rules
+├── config.py                      # Central configuration for all scrapers
+├── scraper_utils.py               # Shared utility functions
+├── db_mongo.py                    # MongoDB database operations
+├── indeed_scraper.py              # Indeed job scraper
+├── linkedin_scraper.py            # LinkedIn job scraper
+├── ai_matcher.py                  # AI-powered job matching (NEW!)
+├── user_profile.md                # Your resume/profile (NEW!)
+├── matching_criteria.txt          # Job matching criteria (NEW!)
+├── run_task.sh                    # Shell script for automated execution
+├── com.user.job_scraper.plist     # macOS LaunchD configuration
+├── requirements.txt               # Python dependencies
+├── .env                           # Environment variables (not in git)
+├── .gitignore                     # Git ignore rules
+├── README.md                      # This file
+├── AI_MATCHING_GUIDE.md           # Detailed AI matching guide (NEW!)
+└── SCHEDULING.md                  # Task scheduling guide (NEW!)
 ```
 
 ## 🗄 Database Schema
 
-Jobs are stored in MongoDB with the following structure:
+### Collection: `jobs`
+
+All scraped jobs are stored here:
 
 ```json
 {
@@ -180,12 +266,43 @@ Jobs are stored in MongoDB with the following structure:
 }
 ```
 
+### Collection: `matched_jobs` (NEW!)
+
+AI-analyzed jobs with high match scores:
+
+```json
+{
+  "title": "Senior Frontend Developer",
+  "company": "Tech Company GmbH",
+  "location": "Berlin, Germany",
+  "link": "https://...",
+  "job_id": "unique_job_identifier",
+  "source": "indeed",
+  "description": "...",
+  
+  "match_score": 8.5,
+  "recommendation": "Yes",
+  "match_reasons": [
+    "Strong React expertise match",
+    "Remote work option available"
+  ],
+  "missing_requirements": ["5+ years preferred"],
+  "red_flags": [],
+  "summary": "Excellent match for frontend role",
+  
+  "status": "pending",
+  "matched_at": "2026-09-20T19:30:00Z",
+  "applied_at": null,
+  "notes": ""
+}
+```
+
 ### Query Jobs
 
 Use the MongoDB client or `db_mongo.py` functions:
 
 ```python
-from db_mongo import init_db, get_jobs_by_source, count_jobs
+from db_mongo import init_db, get_jobs_by_source, count_jobs, get_collection
 
 # Initialize database connection
 init_db()
@@ -195,27 +312,47 @@ indeed_jobs = get_jobs_by_source("indeed")
 
 # Count jobs by source
 count = count_jobs("linkedin")
+
+# Get matched jobs sorted by score
+matched = get_collection("matched_jobs")
+best_matches = matched.find().sort("match_score", -1).limit(10)
 ```
 
 ## 🤖 Automated Scheduling
 
-Use `run_task.sh` for scheduled execution (e.g., with cron):
+Schedule the complete pipeline to run daily:
+
+### Quick Setup (macOS LaunchD - Recommended)
 
 ```bash
-# Make script executable
-chmod +x run_task.sh
+# 1. Copy the plist file
+cp com.user.job_scraper.plist ~/Library/LaunchAgents/
 
+# 2. Load the schedule (runs daily at 9 AM)
+launchctl load ~/Library/LaunchAgents/com.user.job_scraper.plist
+
+# 3. Test immediately
+launchctl start com.user.job_scraper
+```
+
+### Alternative: Cron
+
+```bash
 # Edit crontab
 crontab -e
 
-# Add daily job at 9 AM
-0 9 * * * /path/to/job_scraper/run_task.sh
+# Add this line (runs daily at 9 AM)
+0 9 * * * /path/to/job_scraper/run_task.sh >> /path/to/job_scraper/cron.log 2>&1
 ```
 
-The script will:
+The automated pipeline will:
 1. Start Chrome in debug mode
-2. Run the scrapers
-3. Log execution times to `task.log`
+2. Scrape Indeed jobs
+3. Scrape LinkedIn jobs
+4. **Run AI matching on new jobs**
+5. Log all results to `task.log`
+
+**See [SCHEDULING.md](SCHEDULING.md) for detailed scheduling setup, troubleshooting, and customization options.**
 
 ## ⚠️ Important Notes
 

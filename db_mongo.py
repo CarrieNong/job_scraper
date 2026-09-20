@@ -21,6 +21,22 @@ def get_db():
     return client[DATABASE_NAME]
 
 
+def get_collection(collection_name=None):
+    """
+    Get a specific collection
+    
+    Args:
+        collection_name (str): Name of the collection, defaults to main jobs collection
+        
+    Returns:
+        Collection: MongoDB collection object
+    """
+    db = get_db()
+    if collection_name is None:
+        collection_name = COLLECTION_NAME
+    return db[collection_name]
+
+
 def init_db():
     """Initialize database and create indexes"""
     db = get_db()
@@ -105,6 +121,60 @@ def get_jobs(filter_dict=None, limit=100):
     
     jobs = list(collection.find(filter_dict).sort("created_at", -1).limit(limit))
     return jobs
+
+
+def get_new_jobs(limit=None, source=None):
+    """
+    Get jobs with status "new" that haven't been analyzed yet
+    
+    Args:
+        limit (int): Maximum number of jobs to return (None for all)
+        source (str): Filter by source (indeed, linkedin, or None for all)
+        
+    Returns:
+        list: List of new job documents
+    """
+    db = get_db()
+    collection = db[COLLECTION_NAME]
+    
+    filter_dict = {"status": "new"}
+    if source:
+        filter_dict["source"] = source
+    
+    query = collection.find(filter_dict).sort("created_at", -1)
+    
+    if limit:
+        query = query.limit(limit)
+    
+    return list(query)
+
+
+def get_jobs_by_source(source, limit=100):
+    """
+    Get jobs by source
+    
+    Args:
+        source (str): Job source (indeed, linkedin)
+        limit (int): Maximum number of results
+        
+    Returns:
+        list: List of job documents
+    """
+    return get_jobs(filter_dict={"source": source}, limit=limit)
+
+
+def count_jobs(source=None):
+    """
+    Count jobs, optionally filtered by source
+    
+    Args:
+        source (str): Job source (indeed, linkedin, or None for all)
+        
+    Returns:
+        int: Number of jobs
+    """
+    filter_dict = {"source": source} if source else {}
+    return get_job_count(filter_dict)
 
 
 def get_job_count(filter_dict=None):

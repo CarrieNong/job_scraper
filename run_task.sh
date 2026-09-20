@@ -1,28 +1,62 @@
 #!/bin/bash
-# run_task.sh
+# run_task.sh - Automated job scraping and matching pipeline
 
-# 设置时间日志
-echo "=== Job started at $(date) ===" >> /Users/carrienon/Desktop/code-project/job_scraper/task.log
+# Configuration
+PROJECT_DIR="/Users/carrienon/Desktop/code-project/job_scraper"
+LOG_FILE="$PROJECT_DIR/task.log"
+PYTHON="/opt/homebrew/bin/python3"
 
-# 启动 Chrome 远程调试模式（后台运行）
+# Logging function
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+# Error handling
+set -e
+trap 'log "ERROR: Script failed at line $LINENO"' ERR
+
+log "=== Job Scraping Pipeline Started ==="
+
+# 1. Start Chrome in debug mode (background)
+log "Starting Chrome with remote debugging..."
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
   --remote-debugging-port=9222 \
   --user-data-dir="/tmp/chrome_selenium" \
-  &
+  > /dev/null 2>&1 &
 
-# 等待 Chrome 启动
+CHROME_PID=$!
+log "Chrome started (PID: $CHROME_PID)"
+
+# Wait for Chrome to be ready
 sleep 5
 
-# 进入项目目录
-cd /Users/carrienon/Desktop/code-project/job_scraper || exit
+# Change to project directory
+cd "$PROJECT_DIR" || exit 1
 
-# 执行 scraper.py
-/opt/homebrew/bin/python3 scraper.py
+# 2. Run Indeed scraper
+log "Running Indeed scraper..."
+$PYTHON indeed_scraper.py --max-pages 2 || log "WARNING: Indeed scraper failed"
 
-# 执行 sync_to_notion.py
-/opt/homebrew/bin/python3 sync_to_notion.py
+# 3. Run LinkedIn scraper
+log "Running LinkedIn scraper..."
+$PYTHON linkedin_scraper.py --max-pages 2 || log "WARNING: LinkedIn scraper failed"
 
-# 发送邮件（这里用 macOS 自带的 mail 命令）
-# echo "任务完成于 $(date)" | mail -s "定时任务完成通知" your_email@example.com
+# 4. Run AI job matching
+log "Running AI job matching..."
+$PYTHON ai_matcher.py --threshold 7.0 || log "WARNING: AI matcher failed"
 
-echo "=== Job finished at $(date) ===" >> /Users/carrienon/Desktop/code-project/job_scraper/task.log
+# 5. Optional: Sync to Notion (if you have this script)
+# log "Syncing to Notion..."
+# $PYTHON sync_to_notion.py || log "WARNING: Notion sync failed"
+
+# Cleanup: Close Chrome
+log "Closing Chrome..."
+kill $CHROME_PID 2>/dev/null || true
+
+# Summary
+log "=== Job Scraping Pipeline Completed ==="
+
+# Optional: Send notification email
+# echo "Job scraping pipeline completed at $(date)" | mail -s "Job Scraper Report" your_email@example.com
+
+exit 0

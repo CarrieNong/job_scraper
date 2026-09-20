@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Unique identifier for this job -->
+    <key>Label</key>
+    <string>com.user.job_scraper</string>
+    
+    <!-- Path to the script to run -->
+    <key>Program</key>
+    <string>/Users/carrienon/Desktop/code-project/job_scraper/run_task.sh</string>
+    
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>/Users/carrienon/Desktop/code-project/job_scraper</string>
+    
+    <!-- Run every day at 9:00 AM -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    
+    <!-- Standard output log -->
+    <key>StandardOutPath</key>
+    <string>/Users/carrienon/Desktop/code-project/job_scraper/stdout.log</string>
+    
+    <!-- Error output log -->
+    <key>StandardErrorPath</key>
+    <string>/Users/carrienon/Desktop/code-project/job_scraper/stderr.log</string>
+    
+    <!-- Run even if the previous job is still running -->
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin</string>
+    </dict>
+</dict>
+</plist>
