@@ -2,14 +2,13 @@ from urllib.parse import quote_plus
 import argparse
 import random
 import socket
-import sqlite3
 import subprocess
 import time
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-from db import init_db, save_job
+from db_mongo import init_db, save_job, is_job_id_exists
 
 CDP_HOST = "127.0.0.1"
 CDP_PORT = 9222
@@ -46,22 +45,6 @@ def pause(min_seconds, max_seconds, message=None):
         print(f"{message} ({delay:.1f}s)")
     time.sleep(delay)
 
-
-def is_job_id_exists_in_db(job_id, source=SOURCE):
-    """Return True if this job_id is already stored for the given source."""
-    try:
-        conn = sqlite3.connect("jobs.db")
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT COUNT(*) FROM jobs WHERE job_id = ? AND source = ?",
-            (job_id, source),
-        )
-        count = cursor.fetchone()[0]
-        conn.close()
-        return count > 0
-    except Exception as e:
-        print(f"Failed to check job_id {job_id} in DB: {e}")
-        return False
 
 
 def jobs_search_url(keyword, start=0):
@@ -173,7 +156,7 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
                 print(f"Job {index + 1}: could not extract job_id, skip")
                 continue
 
-            if is_job_id_exists_in_db(job_id):
+            if is_job_id_exists(job_id, SOURCE):
                 print(f"Job {index + 1}: job_id {job_id} already in DB, skip click")
                 continue
 

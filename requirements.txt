@@ -1,1 +1,6 @@
-playwright
+# Web scraping
+playwright>=1.40.0
+
+# Database - MongoDB
+pymongo>=4.6.0
+python-dotenv>=1.0.0
