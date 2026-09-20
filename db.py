@@ -17,10 +17,16 @@ def init_db():
         link TEXT UNIQUE,
         job_id TEXT,
         description TEXT,
+        source TEXT DEFAULT 'linkedin',
         status TEXT DEFAULT 'new',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
+    cursor.execute("PRAGMA table_info(jobs)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if "source" not in columns:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN source TEXT DEFAULT 'linkedin'")
+        cursor.execute("UPDATE jobs SET source = 'linkedin' WHERE source IS NULL OR source = ''")
     conn.commit()
     conn.close()
 
@@ -30,8 +36,8 @@ def save_job(job):
     cursor = conn.cursor()
     try:
         cursor.execute("""
-        INSERT INTO jobs (title, company, location, applicants, link, job_id, description, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO jobs (title, company, location, applicants, link, job_id, description, source, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             job.get("title", ""),
             job.get("company", ""),
@@ -40,6 +46,7 @@ def save_job(job):
             job.get("link", ""),
             job.get("job_id", ""),
             job.get("description", ""),
+            job.get("source", "linkedin"),
             job.get("status", "new"),
         ))
         conn.commit()

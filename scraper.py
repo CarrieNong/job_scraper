@@ -23,6 +23,7 @@ TIME_FILTER = "r86400"
 DEFAULT_KEYWORDS = ["frontend", "full stack","full-stack","fullstack", "ai engineer", "product engineer", "software engineer"]
 DEFAULT_MAX_PAGES = 3
 MAX_JOBS_PER_PAGE = 30
+SOURCE = "linkedin"
 JOB_CARD_SELECTOR = ".scaffold-layout__list-item"
 JOB_LINK_SELECTOR = "a.job-card-container__link"
 
@@ -48,12 +49,15 @@ def extract_job_id_from_url(url):
     return None
 
 
-def is_job_id_exists_in_db(job_id):
-    """Return True if this job_id is already stored. On DB errors, continue scraping."""
+def is_job_id_exists_in_db(job_id, source=SOURCE):
+    """Return True if this job_id is already stored for the given source."""
     try:
         conn = sqlite3.connect("jobs.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM jobs WHERE job_id = ?", (job_id,))
+        cursor.execute(
+            "SELECT COUNT(*) FROM jobs WHERE job_id = ? AND source = ?",
+            (job_id, source),
+        )
         count = cursor.fetchone()[0]
         conn.close()
         return count > 0
@@ -191,6 +195,7 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
                 "job_id": job_id,
                 "applicants": apply_number,
                 "description": job_desc_text,
+                "source": SOURCE,
             }
 
             if save_job(job_data):
