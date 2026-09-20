@@ -1,4 +1,5 @@
 from urllib.parse import quote_plus
+import argparse
 import random
 import re
 import socket
@@ -6,7 +7,6 @@ import sqlite3
 import subprocess
 import time
 
-from bs4 import BeautifulSoup
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
@@ -20,10 +20,9 @@ CHROME_USER_DATA_DIR = "/tmp/chrome_selenium"
 # Germany + posted in the last 24 hours (same filters as the old scraper).
 GEO_ID = "101282230"
 TIME_FILTER = "r86400"
-KEYWORDS = ["product engineer"]
-# KEYWORDS = ["frontend", "full stack", "ai engineer", "product engineer"]
-MAX_PAGES = 1
-MAX_JOBS_PER_PAGE = 10
+DEFAULT_KEYWORDS = ["frontend", "full stack","full-stack","fullstack", "ai engineer", "product engineer", "software engineer"]
+DEFAULT_MAX_PAGES = 3
+MAX_JOBS_PER_PAGE = 30
 JOB_CARD_SELECTOR = ".scaffold-layout__list-item"
 JOB_LINK_SELECTOR = "a.job-card-container__link"
 
@@ -110,6 +109,25 @@ def scroll_job_list(page):
     pause(2, 4, "Waiting for the list to finish rendering")
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Scrape LinkedIn jobs into SQLite.")
+    parser.add_argument(
+        "--keywords",
+        "-k",
+        nargs="+",
+        default=DEFAULT_KEYWORDS,
+        help='Search keywords. Example: -k frontend "full stack" "ai engineer"',
+    )
+    parser.add_argument(
+        "--max-pages",
+        "-p",
+        type=int,
+        default=DEFAULT_MAX_PAGES,
+        help="How many result pages to scrape per keyword.",
+    )
+    return parser.parse_args()
+
+
 def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
     scroll_job_list(page)
     page.wait_for_selector(JOB_CARD_SELECTOR, timeout=15000)
@@ -161,14 +179,9 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
             )
 
             desc_locator = page.locator(".jobs-box__html-content")
-            job_desc = ""
-            if desc_locator.count() > 0:
-                job_desc = desc_locator.first.inner_html() or ""
-            soup = BeautifulSoup(job_desc, "html.parser")
-            job_desc_text = soup.get_text(separator=" ", strip=True)
+            job_desc_text = safe_text(desc_locator, timeout=5000)
             print(f"Job {index + 1}: description length {len(job_desc_text)}")
 
-            # Save every job with full JD. Matching is left to a later AI step.
             job_data = {
                 "title": title,
                 "company": company,
@@ -177,10 +190,7 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
                 "link": href_value,
                 "job_id": job_id,
                 "applicants": apply_number,
-                "html": job_desc,
                 "description": job_desc_text,
-                "is_match": None,
-                "reject_reason": "",
             }
 
             if save_job(job_data):
@@ -213,7 +223,7 @@ def go_to_next_page(page):
     return True
 
 
-def scrape_keyword(page, keyword, max_pages=MAX_PAGES, max_jobs_per_page=MAX_JOBS_PER_PAGE):
+def scrape_keyword(page, keyword, max_pages=DEFAULT_MAX_PAGES, max_jobs_per_page=MAX_JOBS_PER_PAGE):
     print(f"\n========== Keyword: {keyword} ==========")
     page.goto(jobs_search_url(keyword), wait_until="domcontentloaded")
     pause(4, 7, f"Waiting for search results: {keyword}")
@@ -285,6 +295,12 @@ def connect_browser(playwright):
 
 
 def main():
+    args = parse_args()
+    keywords = args.keywords
+    max_pages = args.max_pages
+    print(f"Keywords: {keywords}")
+    print(f"Max pages per keyword: {max_pages}")
+
     init_db()
     all_jobs = []
 
@@ -294,10 +310,10 @@ def main():
         page = context.pages[0] if context.pages else context.new_page()
         print("Log in to LinkedIn in the debug Chrome window if you have not already.")
 
-        for i, keyword in enumerate(KEYWORDS):
-            jobs = scrape_keyword(page, keyword)
+        for i, keyword in enumerate(keywords):
+            jobs = scrape_keyword(page, keyword, max_pages=max_pages)
             all_jobs.extend(jobs)
-            if i < len(KEYWORDS) - 1:
+            if i < len(keywords) - 1:
                 pause(15, 30, "Rest between keywords")
 
         # Do not close the connected Chrome; it is the user's real session.
