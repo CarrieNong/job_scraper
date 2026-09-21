@@ -20,6 +20,7 @@ from db_mongo import (
     get_collection,
     get_new_jobs,
     is_job_id_exists,
+    mark_job_as_matched,
 )
 
 load_dotenv()
@@ -386,6 +387,8 @@ def process_new_jobs(limit: Optional[int] = None, source: Optional[str] = None):
         
         if not analysis:
             print("⚠ AI analysis failed, skip")
+            # 即使失败也标记，避免重复处理
+            mark_job_as_matched(job.get("job_id"), job.get("source"), match_score=0)
             continue
         
         processed_count += 1
@@ -411,6 +414,10 @@ def process_new_jobs(limit: Optional[int] = None, source: Optional[str] = None):
                 matched_count += 1
         else:
             print(f"✗ Score below threshold ({MATCH_THRESHOLD}), not saved")
+        
+        # 标记此job已经过AI匹配（重要：避免重复处理）
+        mark_job_as_matched(job.get("job_id"), job.get("source"), match_score=match_score)
+        print(f"✓ Marked as matched in jobs collection")
     
     print(f"\n=== Matching Complete ===")
     print(f"Processed: {processed_count}/{total_jobs}")

@@ -137,7 +137,11 @@ def get_new_jobs(limit=None, source=None):
     db = get_db()
     collection = db[COLLECTION_NAME]
     
-    filter_dict = {"status": "new"}
+    # 只查询status="new" 且 没有matched_at字段的职位（未进行AI匹配）
+    filter_dict = {
+        "status": "new",
+        "matched_at": {"$exists": False}  # 新增：排除已匹配的
+    }
     if source:
         filter_dict["source"] = source
     
@@ -214,6 +218,37 @@ def update_job_status(job_id, source, new_status):
     result = collection.update_one(
         {"job_id": job_id, "source": source},
         {"$set": {"status": new_status, "updated_at": datetime.now()}}
+    )
+    
+    return result.modified_count > 0
+
+
+def mark_job_as_matched(job_id, source, match_score=None):
+    """
+    标记职位为已匹配（已进行AI分析）
+    
+    Args:
+        job_id (str): Job ID
+        source (str): Job source website
+        match_score (float): 匹配分数（0-10）
+        
+    Returns:
+        bool: True if updated successfully
+    """
+    db = get_db()
+    collection = db[COLLECTION_NAME]
+    
+    update_data = {
+        "matched_at": datetime.now(),
+        "updated_at": datetime.now()
+    }
+    
+    if match_score is not None:
+        update_data["match_score"] = match_score
+    
+    result = collection.update_one(
+        {"job_id": job_id, "source": source},
+        {"$set": update_data}
     )
     
     return result.modified_count > 0
