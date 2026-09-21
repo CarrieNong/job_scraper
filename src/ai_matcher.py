@@ -95,41 +95,143 @@ def build_matching_prompt(job: Dict, user_profile: str, criteria: str) -> str:
 ## Candidate Profile
 {user_profile}
 
-## Matching Criteria
+## Matching Criteria (FOLLOW STRICTLY)
 {criteria}
 
-## Your Task
-Analyze the job posting and provide:
+## CRITICAL EVALUATION PROCESS - FOLLOW THIS ORDER:
 
-1. **Match Score** (0-10): How well does this job match the candidate's profile and criteria?
-   - 0-3: Poor match (not recommended)
-   - 4-6: Moderate match (consider carefully)
-   - 7-8: Good match (recommended)
-   - 9-10: Excellent match (highly recommended)
+### STEP 1: Hard Requirements Check (IMMEDIATE DISQUALIFICATION)
+**Check these FIRST. If ANY fails, assign score ≤ 3 immediately:**
 
-2. **Match Reasons**: List 3-5 key reasons why this job matches or doesn't match
+1. **German Language Check**:
+   **CRITICAL DISTINCTION**: 
+   - ❌ DO NOT disqualify just because the JD is written in German language
+   - ✅ ONLY disqualify if German is explicitly listed as a JOB REQUIREMENT in the requirements/qualifications section
+   
+   **Check if German appears in the REQUIREMENTS section with keywords like**:
+   - "German required" / "Deutsch erforderlich"
+   - "Deutschkenntnisse erforderlich" / "German skills required"  
+   - "German mandatory" / "Deutsch zwingend erforderlich"
+   - "Fluent German" / "Fließend Deutsch"
+   - "German B2+", "German C1", "Native German speaker"
+   - "Sehr gute Deutschkenntnisse erforderlich"
+   - "German is a must" / "Deutsch ist Voraussetzung"
+   
+   **Decision**:
+   - ❌ If German is listed as REQUIRED in job requirements → DISQUALIFY (score ≤ 3)
+   - ✅ If JD is in German but doesn't list German as requirement → PASS
+   - ✅ If German is "nice to have" or not mentioned → PASS
 
-3. **Missing Requirements**: Any important requirements the candidate might not meet
+2. **Backend Language Check** (ONLY if backend is explicitly required):
+   - Does JD explicitly require a specific backend language as mandatory?
+   - Candidate has: Node.js only (1 year experience)
+   - ❌ If requires Python/Java/Go/PHP/Ruby/C#/.NET as mandatory → DISQUALIFY (score ≤ 3)
+   - ✅ If requires Node.js or no specific backend requirement → PASS
 
-4. **Red Flags**: Any concerning aspects of the job posting
+3. **DevOps/SRE Check**:
+   - Is this primarily a DevOps/SRE role OR does it require DevOps as core responsibility?
+   - ❌ If YES → DISQUALIFY (score ≤ 3)
+   - ✅ If DevOps is "nice to have" or basic CI/CD → PASS
 
-5. **Recommendation**: Should the candidate apply? (Yes/No/Maybe)
+**If ANY hard requirement fails, stop here and provide clear disqualification reason.**
+
+---
+
+### STEP 2: Required Skills Match (Base Score: 4-8)
+Evaluate ONLY skills marked as "required" or "mandatory" in JD:
+- Frontend frameworks: React/Vue/Angular (candidate has 7 years)
+- Experience level match
+- Required technical stack alignment
+- Role focus (frontend vs backend split)
+
+**Scoring Guide**:
+- 8: 90%+ required skills match
+- 7: 70-89% required skills match
+- 6: 50-69% required skills match
+- 5: 40-49% required skills match
+- 4: 30-39% required skills match
+
+---
+
+### STEP 3: Nice to Have Bonus (+0 to +2)
+**CRITICAL**: "Nice to have", "Plus", "Bonus", "Preferred" skills:
+- ✅ Add +0.5 to +2 points ONLY if candidate HAS these skills
+- ➖ Add ZERO penalty if candidate does NOT have these skills
+- NEVER reduce base score for missing nice-to-have skills
+
+---
+
+### STEP 4: Domain Fit Bonus (+0 to +1)
+- +1: E-commerce, SaaS, food compliance (perfect match)
+- +0.5: Related domains
+- +0: Neutral
+
+---
+
+## Your Task - Provide JSON Response:
+
+**Match Score Range**:
+- 0-3: Disqualified (hard requirements not met)
+- 4-6: Weak match (many required skills missing)
+- 7-8: Good match (most required skills present)
+- 9-10: Excellent match (all required + many nice-to-have)
 
 Please respond in the following JSON format:
 {{
-    "match_score": 8.5,
-    "recommendation": "Yes",
+    "match_score": <number 0-10>,
+    "recommendation": "<Yes/No>",
+    "disqualification_reason": "<Only include this field if score ≤ 3, provide specific reason>",
     "match_reasons": [
-        "Strong alignment with frontend skills",
-        "Company values match preferences",
-        "Remote work option available"
+        "<List specific matching points>"
     ],
     "missing_requirements": [
-        "Prefers 5+ years experience but candidate has 3"
+        "<List missing REQUIRED skills only>"
     ],
-    "red_flags": [],
-    "summary": "Brief 1-2 sentence summary of why this is a good/bad match"
+    "red_flags": [
+        "<List concerning points>"
+    ],
+    "nice_to_have_matches": [
+        "<List nice-to-have skills candidate HAS>"
+    ],
+    "summary": "<Brief 1-2 sentence summary explaining the match score>"
 }}
+
+EXAMPLE for a disqualified job (score ≤ 3):
+{{
+    "match_score": 2.0,
+    "recommendation": "No",
+    "disqualification_reason": "Position explicitly requires Python as mandatory backend language, but candidate only has Node.js experience",
+    "match_reasons": ["Frontend React experience matches requirement"],
+    "missing_requirements": ["Python (mandatory)", "5+ years backend experience"],
+    "red_flags": ["Backend-heavy role (70% backend work)", "Python explicitly required"],
+    "nice_to_have_matches": [],
+    "summary": "Strong frontend skills but fails hard requirement of mandatory Python backend experience."
+}}
+
+EXAMPLE for a good match (score 7-8):
+{{
+    "match_score": 8.0,
+    "recommendation": "Yes",
+    "match_reasons": [
+        "Frontend skills align perfectly with React requirement",
+        "Experience level matches (5-7 years required)",
+        "E-commerce domain experience highly relevant"
+    ],
+    "missing_requirements": [],
+    "red_flags": [],
+    "nice_to_have_matches": [
+        "TypeScript (listed as nice to have)",
+        "Docker experience (listed as plus)"
+    ],
+    "summary": "Excellent match with strong frontend skills and relevant e-commerce experience."
+}}
+
+**Important Notes**:
+- Include "disqualification_reason" ONLY if score ≤ 3
+- List "nice_to_have_matches" to show which bonus skills candidate has
+- Be STRICT on hard requirements (German, backend language, DevOps)
+- Be FAIR on required vs nice-to-have distinction
+- Focus scoring on REQUIRED skills only, add bonus for nice-to-have
 """
     return prompt
 
@@ -161,7 +263,7 @@ def analyze_job_with_ai(job: Dict, user_profile: str, criteria: str) -> Optional
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a professional career advisor specializing in job matching. Respond only with valid JSON."
+                    "content": "You are a strict professional career advisor specializing in job matching. You must follow the matching criteria exactly. Be STRICT on hard requirements (German language, backend language, DevOps). CRITICAL GERMAN LANGUAGE RULE: A job written in German does NOT mean German is required - you must look for EXPLICIT keywords like 'German required', 'Deutsch erforderlich', 'Fluent German', 'German B2+' in the REQUIREMENTS section. If these keywords are NOT present, do NOT disqualify for German. Be FAIR on required vs nice-to-have skills. NEVER penalize missing nice-to-have skills. Provide SPECIFIC disqualification reasons based on the actual job requirements, not generic examples. Respond only with valid JSON."
                 },
                 {
                     "role": "user",
@@ -218,9 +320,11 @@ def save_matched_job(job: Dict, analysis: Dict) -> bool:
             # AI matching analysis
             "match_score": analysis.get("match_score", 0),
             "recommendation": analysis.get("recommendation", ""),
+            "disqualification_reason": analysis.get("disqualification_reason", ""),  # New field
             "match_reasons": analysis.get("match_reasons", []),
             "missing_requirements": analysis.get("missing_requirements", []),
             "red_flags": analysis.get("red_flags", []),
+            "nice_to_have_matches": analysis.get("nice_to_have_matches", []),  # New field
             "summary": analysis.get("summary", ""),
             
             # Metadata
@@ -286,8 +390,20 @@ def process_new_jobs(limit: Optional[int] = None, source: Optional[str] = None):
         
         processed_count += 1
         match_score = analysis.get("match_score", 0)
+        recommendation = analysis.get("recommendation", "")
+        disqualification_reason = analysis.get("disqualification_reason", "")
+        
         print(f"Match score: {match_score}/10")
-        print(f"Recommendation: {analysis.get('recommendation')}")
+        print(f"Recommendation: {recommendation}")
+        
+        # Show disqualification reason if present
+        if disqualification_reason:
+            print(f"⚠️  Disqualification: {disqualification_reason}")
+        
+        # Show nice-to-have matches if present
+        nice_to_have = analysis.get("nice_to_have_matches", [])
+        if nice_to_have and len(nice_to_have) > 0:
+            print(f"✨ Nice-to-have matches: {', '.join(nice_to_have[:3])}")
         
         # Save if meets threshold
         if match_score >= MATCH_THRESHOLD:
