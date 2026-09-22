@@ -26,6 +26,7 @@ from scraper_utils import (
     safe_text,
     parse_args,
     connect_browser,
+    is_title_excluded,
 )
 
 # LinkedIn configuration
@@ -167,6 +168,10 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
             job_id = extract_job_id_from_url(href_value)
             if not job_id:
                 print(f"Job {index + 1}: could not extract job_id, skip")
+                continue
+
+            if is_title_excluded(title):
+                print(f"Job {index + 1}: title excluded by filter, skip → {title}")
                 continue
 
             if is_job_id_exists(job_id, SOURCE):

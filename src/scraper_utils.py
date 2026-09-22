@@ -4,6 +4,7 @@ Provides common functionality for browser automation, delays, and data extractio
 """
 import argparse
 import random
+import re
 import socket
 import subprocess
 import time
@@ -16,7 +17,31 @@ from config import (
     CDP_URL,
     CHROME_BIN,
     CHROME_USER_DATA_DIR,
+    TITLE_EXCLUDE_KEYWORDS,
 )
+
+# Pre-compile all exclusion patterns once for efficiency (case-insensitive)
+_EXCLUDE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in TITLE_EXCLUDE_KEYWORDS]
+
+
+def is_title_excluded(title: str) -> bool:
+    """
+    Return True if the job title matches any exclusion pattern defined in
+    TITLE_EXCLUDE_KEYWORDS, meaning the job card should be skipped without
+    clicking into the detail page.
+
+    Args:
+        title: Job title string extracted from the card
+
+    Returns:
+        True if the title should be excluded, False otherwise
+    """
+    if not title:
+        return False
+    for pattern in _EXCLUDE_PATTERNS:
+        if pattern.search(title):
+            return True
+    return False
 
 
 def pause(min_seconds, max_seconds, message=None):

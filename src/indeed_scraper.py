@@ -26,6 +26,7 @@ from scraper_utils import (
     safe_attr,
     parse_args,
     connect_browser,
+    is_title_excluded,
 )
 
 # Indeed configuration
@@ -83,6 +84,11 @@ def extract_card_fields(card):
     """
     Extract title, job_id, and URL from an Indeed job card.
     
+    Title resolution order:
+      1. `title` attribute on the <span> inside h3.jobTitle  (most reliable)
+      2. Inner text of that <span>
+      3. Inner text of the whole h3.jobTitle heading
+
     Args:
         card: Playwright locator for a job card element
         
@@ -90,7 +96,9 @@ def extract_card_fields(card):
         Tuple of (title, job_id, href)
     """
     title_heading = card.locator(JOB_TITLE_SELECTOR).first
-    title = safe_text(title_heading.locator("span"))
+    span = title_heading.locator("span").first
+    # Prefer the span's title attribute (Indeed DE sets it reliably)
+    title = safe_attr(span, "title") or safe_text(span)
     if not title:
         title = safe_text(title_heading)
 
@@ -139,6 +147,10 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
 
             if not job_id:
                 print(f"Job {index + 1}: could not extract job_id, skip")
+                continue
+
+            if is_title_excluded(title):
+                print(f"Job {index + 1}: title excluded by filter, skip → {title}")
                 continue
 
             if is_job_id_exists(job_id, SOURCE):

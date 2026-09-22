@@ -8,7 +8,6 @@ Centralized configuration for all scrapers
 # Default search keywords
 DEFAULT_KEYWORDS = [
     "frontend",
-    "full stack",
     "full-stack",
     "fullstack",
     "ai engineer",
@@ -26,6 +25,32 @@ CDP_PORT = 9222
 CDP_URL = f"http://{CDP_HOST}:{CDP_PORT}"
 CHROME_BIN = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 CHROME_USER_DATA_DIR = "/tmp/chrome_selenium"
+
+
+# ===== Title Pre-filter (skip clicking if title matches any pattern) =====
+# Patterns are case-insensitive regex. Use \b for word boundaries where needed.
+# Java uses \b to avoid matching JavaScript.
+TITLE_EXCLUDE_KEYWORDS = [
+    r"\bJava\b",           # Java (not JavaScript)
+    r"\bCloud\b",
+    r"\bLead\b",
+    r"\bStaff\b",
+    r"\bFounding\b",
+    r"\bDevOps\b",
+    r"C#",                 # C# / C++/C#
+    r"\.NET",              # .NET
+    r"\bEmbedded\b",
+    r"C\+\+",              # C++
+    r"\bQA\b",             # QA Engineer
+    r"\bTest\s+Engineer\b",
+    r"\bProject\s+Manager\b",
+    r"\bFlutter\b",
+    r"\bReact\s+Native\b",
+    r"\bPrincipal\b",
+    r"\bManager\b",        # also catches Project Manager
+    r"\bAndroid\b",
+    r"\bArchitect\b",
+]
 
 
 # ===== Indeed Platform Configuration =====
