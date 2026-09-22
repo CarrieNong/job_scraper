@@ -191,6 +191,55 @@
       overflow: hidden;
     }
 
+    /* Job Wizard breakdown */
+    .breakdown {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+    .breakdown + .breakdown { margin-top: -6px; }
+    .breakdown summary {
+      cursor: pointer;
+      font-size: .78rem;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      list-style: none;
+    }
+    .breakdown summary::-webkit-details-marker { display: none; }
+    .breakdown summary::before {
+      content: "▸";
+      color: var(--muted);
+      font-size: .7rem;
+      flex-shrink: 0;
+    }
+    .breakdown[open] summary::before { content: "▾"; }
+    .bd-count {
+      margin-left: auto;
+      font-weight: 500;
+      color: var(--muted);
+      font-size: .72rem;
+    }
+    .bd-list {
+      margin: 8px 0 2px;
+      padding-left: 0;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .bd-list li {
+      font-size: .75rem;
+      line-height: 1.45;
+      padding-left: 2px;
+    }
+    .bd-ok { color: #86efac; }
+    .bd-no { color: #fca5a5; }
+
     /* Apply button */
     .btn-apply {
       display: inline-flex; align-items: center; gap: 6px;
@@ -448,11 +497,34 @@ function scoreCls(score) {
   return 'score-lo';
 }
 
+/* ── Job Wizard breakdown ────────────────────────────────────────── */
+function renderBreakdown(title, section) {
+  if (!section) return '';
+  const matched = Array.isArray(section.matched) ? section.matched : [];
+  const unmatched = Array.isArray(section.unmatched) ? section.unmatched : [];
+  if (!matched.length && !unmatched.length) return '';
+  const total = matched.length + unmatched.length;
+  const items = [
+    ...matched.map(t => `<li class="bd-ok">✓ ${escHtml(t)}</li>`),
+    ...unmatched.map(t => `<li class="bd-no">✗ ${escHtml(t)}</li>`),
+  ].join('');
+  return `
+    <details class="breakdown">
+      <summary><span>${title}</span><span class="bd-count">${matched.length}/${total} 匹配</span></summary>
+      <ul class="bd-list">${items}</ul>
+    </details>`;
+}
+
 /* ── Render card ─────────────────────────────────────────────────── */
 function renderCard(job) {
   const score  = (job.match_score || 0).toFixed(1);
   const status = job.status || 'pending';
-  const matchReasons = (job.match_reasons || []).slice(0, 3).map(r => `<li>${r}</li>`).join('');
+  const doSection = renderBreakdown("What you'll do", job.what_youll_do);
+  const lookingSection = renderBreakdown("What they're looking for", job.what_theyre_looking_for);
+  const hasBreakdown = Boolean(doSection || lookingSection);
+  const matchReasons = hasBreakdown
+    ? ''
+    : (job.match_reasons || []).slice(0, 3).map(r => `<li>${escHtml(r)}</li>`).join('');
 
   const card = document.createElement('div');
   card.className = 'card';
@@ -474,6 +546,9 @@ function renderCard(job) {
     </div>
 
     ${job.summary ? `<div class="card-summary">${escHtml(job.summary)}</div>` : ''}
+
+    ${doSection}
+    ${lookingSection}
 
     ${matchReasons ? `<ul style="font-size:.78rem;color:var(--muted);padding-left:16px;line-height:1.6;">${matchReasons}</ul>` : ''}
 

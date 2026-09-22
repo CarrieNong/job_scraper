@@ -7,54 +7,46 @@
 ### 1. Language Requirements - MANDATORY CHECK
 - ✅ **Must Have**: English (required)
 - ✅ **Native**: Chinese
+- Candidate does **not** speak German.
 
-- ❌ **DISQUALIFY if**: The JD **explicitly states** German language as a **job requirement** (not just JD written in German)
-  
-  **IMPORTANT DISTINCTION**:
-  - ❌ **DO NOT** disqualify just because the JD is written in German language
-  - ✅ **ONLY** disqualify if German is explicitly listed in the requirements/qualifications section
-  
-  **DISQUALIFY if ANY of these appear anywhere in the job description**:
-  
-  *Explicit requirement keywords:*
-  - "German required" / "Deutsch erforderlich" / "Deutsch ist erforderlich"
-  - "Deutschkenntnisse erforderlich" / "German skills required"
-  - "German mandatory" / "Deutsch zwingend erforderlich"
-  - "Deutsch ist Voraussetzung" / "German is a must"
-  - "Sehr gute Deutschkenntnisse erforderlich"
-  
-  *Language level declarations (these always mean German IS required):*
-  - "Deutsch - Fließend" / "Deutsch - Verhandlungssicher" / "Deutsch - Konversationssicher"
-  - "Deutsch - Grundkenntnisse" / "Deutsch - Muttersprache"
-  - "Sprachanforderungen" / "Sprachanforderung" (= language requirements section header)
-  - "Fluent German" / "Fließend Deutsch" / "Fließende Deutschkenntnisse"
-  - "German C1" / "German C2" / "German B2" / "Deutsch (C1)" / "Deutsch (C2)" / "Deutsch (B2)"
-  - "Native German" / "Muttersprache Deutsch" / "Deutsch auf Muttersprachniveau"
-  
-  *General proficiency requirements:*
-  - "Gute Deutschkenntnisse" / "Gutes Deutsch" / "Sehr gute Deutschkenntnisse"
-  - "Deutschkenntnisse" (when in requirements/Anforderungen/Qualifikationen section)
-  - "Deutsch in Wort und Schrift"
-  
-  **DO NOT disqualify if**:
-  - JD is written in German but none of the above signals appear
-  - German is explicitly "nice to have" / "von Vorteil" / "wünschenswert"
-  - German appears only in company description, not in job requirements
+German-language postings are already filtered out before matching. Do **not** re-filter based on the JD being (or looking) German, and do **not** use keyword lists.
+
+**DISQUALIFY** only if you judge from meaning that **German is a mandatory job requirement** (must-have / required / fluent / native for the role). This is common when an English JD still says German is required.
+
+**DO NOT disqualify if**:
+- German is "nice to have" / "plus" / "advantage" / "preferred"
+- German appears only in the company description, not as a job requirement
 
 ### 2. Backend Language Requirements - MANDATORY CHECK
-**ONLY IF** the JD explicitly lists a backend language as **"required"** or **"mandatory"**:
-- ✅ **Full Match**: Node.js (Express.js, Nest.js, Fastify, Koa, etc.)
-- ❌ **DISQUALIFY if** ANY other backend language is explicitly required:
-  - Python (Django, Flask, FastAPI)
-  - Java (Spring Boot, Jakarta EE)
-  - Go, PHP, Ruby, C#, .NET, Scala, Rust, Kotlin, etc.
+Candidate backend:
+- ✅ **Strong**: Node.js ecosystem (Express.js, Nest.js, Fastify, Koa, etc.)
+- ⚠️ **Light**: a little Python — **not** enough for a Python-primary backend role
+- ❌ **Does not know**: Java, Go, PHP, Ruby, C#, .NET, Scala, Rust, Kotlin, etc.
+
+**DISQUALIFY** if a backend language the candidate cannot do is a **hard/mandatory** requirement, including:
+- Python / Django / Flask / FastAPI as the required backend
+- Java / Spring, Go, PHP, Ruby, C#, .NET, or similar as the required backend
 
 **DO NOT DISQUALIFY if**:
-- No backend language requirement mentioned
-- Backend listed as "nice to have" or "plus"
-- Frontend-focused role with backend as optional
+- No backend language is required
+- Backend is "nice to have" / "plus"
+- Frontend-focused role with optional backend
+- Required backend is Node.js
+- Python is only mentioned as nice-to-have
 
-### 3. DevOps/Operations Requirements - MANDATORY CHECK
+### 3. Years of Experience - MANDATORY CHECK
+Candidate:
+- **7 years** professional frontend / software engineering
+- **1 year** full-stack / backend (Node.js)
+
+**DISQUALIFY** if a **must-have** requirement asks for more years than the candidate has in that dimension:
+- Overall / frontend / software experience required **> 7 years**
+- Backend-specific experience required **> 1 year** (a range that includes 1, e.g. "1-2 years", PASSES)
+
+Do **not** disqualify on the title "Senior" alone if the stated year requirement is within range.
+Nice-to-have year requirements do not disqualify.
+
+### 4. DevOps/Operations Requirements - MANDATORY CHECK
 ❌ **DISQUALIFY if**:
 - Job title includes "DevOps", "SRE", or "Infrastructure"
 - JD explicitly requires "DevOps experience required", "SRE experience mandatory"
@@ -89,9 +81,9 @@
 **Actual Experience**: 1 year of full-stack/backend with Node.js
 
 - **Match Requirements**:
-  - ✅ If backend requires: "1-2 years" or no specific years mentioned
-  - ⚠️ Moderate penalty if requires: "3+ years backend experience"
-  - ❌ Low match if requires: "5+ years backend" or "Senior backend developer"
+  - ✅ If backend requires: "1 year", "1-2 years", or no specific years mentioned
+  - ❌ DISQUALIFY if a must-have asks for more than 1 year of backend experience
+  - ❌ DISQUALIFY if overall/frontend must-have years > 7
 
 ### Other Technology Stack
 **Resume Skills**: MongoDB, Git, Webpack, Vite, Sentry, Jest, Cypress, Playwright, AI tools
@@ -165,9 +157,10 @@
 ## Scoring Instructions for AI
 
 ### STEP 1: Hard Requirements Check (DISQUALIFY = Score ≤ 3)
-1. ❌ German required/mandatory? → DISQUALIFY
-2. ❌ Non-Node.js backend required? → DISQUALIFY  
-3. ❌ DevOps/SRE required as core role? → DISQUALIFY
+1. ❌ German is a mandatory job requirement (judge by meaning, not keywords)? → DISQUALIFY
+2. ❌ Hard-required backend language is not Node.js (Python-primary, Java, Go, etc.)? → DISQUALIFY
+3. ❌ Must-have years of experience exceed candidate years (7 frontend / 1 backend)? → DISQUALIFY
+4. ❌ DevOps/SRE required as core role? → DISQUALIFY
 
 **If any hard requirement fails, assign score ≤ 3 and provide clear reason.**
 
@@ -184,11 +177,9 @@ Evaluate ONLY "required" or "mandatory" skills:
   
 - **7 points**: 70-89% required skills match
   - Frontend matches, minor gaps in secondary skills
-  - Experience slightly below requirement (e.g., 1yr vs 2yr backend)
   
 - **6 points**: 50-69% required skills match
   - Frontend matches but significant secondary gaps
-  - Experience level somewhat below requirement
   
 - **5 points**: 40-49% required skills match
 - **4 points**: 30-39% required skills match
@@ -223,9 +214,10 @@ Evaluate ONLY "required" or "mandatory" skills:
 
 ## Red Flags (Automatic Low Match)
 
-- ❌ German language mandatory (any form: Sprachanforderungen, Gutes Deutsch, Deutsch - Fließend/C1/C2, etc.)
+- ❌ German language mandatory (judge by meaning; nice-to-have German is OK)
 - ❌ Backend-heavy roles (>70% backend) with non-Node.js stack
-- ❌ Non-Node.js backend explicitly required as mandatory
+- ❌ Non-Node.js backend explicitly required as mandatory (including Python-primary)
+- ❌ Must-have years exceed candidate years (7 frontend / 1 backend)
 - ❌ 5+ years backend experience explicitly required
 - ❌ Heavy DevOps/infrastructure as core responsibility
 - ❌ Enterprise legacy tech stacks explicitly required (Oracle, SAP, Mainframe)
@@ -259,7 +251,7 @@ Evaluate ONLY "required" or "mandatory" skills:
 5. **Final Score** → Sum all components (max 10)
 
 **Key Principles**:
-- Be STRICT on hard requirements (German, backend language, DevOps)
+- Be STRICT on hard requirements (mandatory German, backend language, years of experience, DevOps)
 - Focus on REQUIRED skills only for base scoring
 - NEVER penalize missing "nice to have" skills
 - DO reward having "nice to have" skills with modest bonus

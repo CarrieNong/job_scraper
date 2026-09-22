@@ -136,53 +136,43 @@ def build_matching_prompt(job: Dict, user_profile: str, criteria: str) -> str:
 
 ## CRITICAL EVALUATION PROCESS - FOLLOW THIS ORDER:
 
+### STEP 0: Parse the JD (Job Wizard style) — ALWAYS DO THIS FIRST
+Read the full job description and split it into two lists of atomic items (one responsibility or requirement per bullet). Paraphrase clearly; do not invent items that are not in the JD.
+
+1. **What you'll do** — day-to-day responsibilities, duties, tasks, ownership
+2. **What they're looking for** — qualifications, skills, years of experience, languages, education, must-haves and nice-to-haves
+
+Then compare EACH item against the candidate profile:
+- **matched**: the candidate can reasonably do / already has this, based on the resume
+- **unmatched**: the candidate cannot do this, or it is a gap
+
+These two breakdowns MUST appear in the JSON. They are independent of scoring: still fill them even if the job is disqualified.
+
+---
+
 ### STEP 1: Hard Requirements Check (IMMEDIATE DISQUALIFICATION)
-**Check these FIRST. If ANY fails, assign score ≤ 3 immediately:**
+**Check these FIRST. If ANY fails, assign score ≤ 3 immediately.** Still complete Step 0 breakdowns.
 
-1. **German Language Check**:
-   **CRITICAL DISTINCTION**: 
-   - ❌ DO NOT disqualify just because the JD is written in German language
-   - ✅ ONLY disqualify if German is explicitly listed as a JOB REQUIREMENT
-   
-   **DISQUALIFY (score ≤ 3) if ANY of the following appear anywhere in the job text**:
-   
-   *Explicit requirement keywords:*
-   - "German required" / "Deutsch erforderlich" / "Deutsch ist erforderlich"
-   - "Deutschkenntnisse erforderlich" / "German skills required"
-   - "German mandatory" / "Deutsch zwingend erforderlich"
-   - "Deutsch ist Voraussetzung" / "German is a must"
-   - "Sehr gute Deutschkenntnisse erforderlich"
-   
-   *Language level declarations (these always mean German IS required):*
-   - "Deutsch - Fließend" / "Deutsch - Verhandlungssicher" / "Deutsch - Konversationssicher"
-   - "Deutsch - Grundkenntnisse" / "Deutsch - Muttersprache"
-   - "Sprachanforderungen" / "Sprachanforderung" (language requirements section)
-   - "Fluent German" / "Fließend Deutsch" / "Fließende Deutschkenntnisse"
-   - "German C1" / "German C2" / "German B2" / "Deutsch (C1)" / "Deutsch (C2)" / "Deutsch (B2)"
-   - "Native German" / "Muttersprache Deutsch" / "Deutsch auf Muttersprachniveau"
-   
-   *General proficiency requirements:*
-   - "Gute Deutschkenntnisse" / "Gutes Deutsch" / "Sehr gute Deutschkenntnisse"
-   - "Deutschkenntnisse" (when listed under requirements/Anforderungen/Qualifikationen)
-   - "Deutsch in Wort und Schrift"
-   
-   **Decision**:
-   - ❌ If ANY of the above is found → DISQUALIFY (score ≤ 3)
-   - ✅ If JD is written in German but none of the above appear → PASS
-   - ✅ If German is explicitly "nice to have" / "von Vorteil" → PASS
+1. **German language** (semantic judgment only — NO keyword matching):
+   - German-language JDs are already filtered out. Do not re-filter because the text looks German.
+   - ❌ DISQUALIFY only if you judge that German is a **mandatory job requirement** (must-have / required / fluent / native for the role). English JDs often still require German.
+   - ✅ PASS if German is nice-to-have / plus / advantage, or not required.
 
-2. **Backend Language Check** (ONLY if backend is explicitly required):
-   - Does JD explicitly require a specific backend language as mandatory?
-   - Candidate has: Node.js only (1 year experience)
-   - ❌ If requires Python/Java/Go/PHP/Ruby/C#/.NET as mandatory → DISQUALIFY (score ≤ 3)
-   - ✅ If requires Node.js or no specific backend requirement → PASS
+2. **Years of experience**:
+   - Candidate: **7 years** frontend / software engineering; **1 year** full-stack / backend (Node.js).
+   - ❌ DISQUALIFY if a **must-have** year requirement exceeds the candidate in that dimension (overall/frontend/software > 7, or backend-specific > 1). A range that includes the candidate's years (e.g. "1-2 years" backend) PASSES.
+   - ✅ PASS if years are within range, unstated, or only a nice-to-have. "Senior" in the title alone is not a disqualification.
 
-3. **DevOps/SRE Check**:
-   - Is this primarily a DevOps/SRE role OR does it require DevOps as core responsibility?
-   - ❌ If YES → DISQUALIFY (score ≤ 3)
-   - ✅ If DevOps is "nice to have" or basic CI/CD → PASS
+3. **Backend language** (ONLY if a backend language is a hard/mandatory requirement):
+   - Candidate: Node.js ecosystem (Express, Nest, Fastify, Koa, etc.) + a little Python (NOT enough for a Python-primary backend role).
+   - ❌ DISQUALIFY if the required backend is Python/Django/Flask/FastAPI, Java, Go, PHP, Ruby, C#, .NET, or any language the candidate does not know.
+   - ✅ PASS if required backend is Node.js, or no backend language is mandatory, or backend is nice-to-have.
 
-**If ANY hard requirement fails, stop here and provide clear disqualification reason.**
+4. **DevOps/SRE**:
+   - ❌ DISQUALIFY if this is primarily a DevOps/SRE role OR DevOps is a core responsibility.
+   - ✅ PASS if DevOps is nice-to-have or only basic CI/CD / Docker / Git.
+
+**If ANY hard requirement fails, score ≤ 3 and give a specific disqualification_reason.**
 
 ---
 
@@ -230,6 +220,14 @@ Please respond in the following JSON format:
     "match_score": <number 0-10>,
     "recommendation": "<Yes/No>",
     "disqualification_reason": "<Only include this field if score ≤ 3, provide specific reason>",
+    "what_youll_do": {{
+        "matched": ["<responsibility the candidate can do>"],
+        "unmatched": ["<responsibility the candidate cannot do>"]
+    }},
+    "what_theyre_looking_for": {{
+        "matched": ["<requirement the candidate meets>"],
+        "unmatched": ["<requirement the candidate does not meet>"]
+    }},
     "match_reasons": [
         "<List specific matching points>"
     ],
@@ -249,10 +247,18 @@ EXAMPLE for a disqualified job (score ≤ 3):
 {{
     "match_score": 2.0,
     "recommendation": "No",
-    "disqualification_reason": "Position explicitly requires Python as mandatory backend language, but candidate only has Node.js experience",
+    "disqualification_reason": "Must-have backend is Python/Django; candidate only has Node.js plus light Python, which is not enough",
+    "what_youll_do": {{
+        "matched": ["Build React user interfaces", "Collaborate with product and design"],
+        "unmatched": ["Own Django REST APIs"]
+    }},
+    "what_theyre_looking_for": {{
+        "matched": ["5+ years frontend experience", "React and TypeScript"],
+        "unmatched": ["3+ years Python/Django as mandatory backend"]
+    }},
     "match_reasons": ["Frontend React experience matches requirement"],
-    "missing_requirements": ["Python (mandatory)", "5+ years backend experience"],
-    "red_flags": ["Backend-heavy role (70% backend work)", "Python explicitly required"],
+    "missing_requirements": ["Python (mandatory)", "3+ years backend experience"],
+    "red_flags": ["Backend-heavy role", "Python explicitly required"],
     "nice_to_have_matches": [],
     "summary": "Strong frontend skills but fails hard requirement of mandatory Python backend experience."
 }}
@@ -261,6 +267,14 @@ EXAMPLE for a good match (score 7-8):
 {{
     "match_score": 8.0,
     "recommendation": "Yes",
+    "what_youll_do": {{
+        "matched": ["Develop React/TypeScript features", "Improve web performance", "Work with designers on UI"],
+        "unmatched": []
+    }},
+    "what_theyre_looking_for": {{
+        "matched": ["5+ years frontend", "React and TypeScript", "E-commerce experience"],
+        "unmatched": ["GraphQL in production"]
+    }},
     "match_reasons": [
         "Frontend skills align perfectly with React requirement",
         "Experience level matches (5-7 years required)",
@@ -276,9 +290,10 @@ EXAMPLE for a good match (score 7-8):
 }}
 
 **Important Notes**:
+- Always fill what_youll_do and what_theyre_looking_for with concrete JD items
 - Include "disqualification_reason" ONLY if score ≤ 3
 - List "nice_to_have_matches" to show which bonus skills candidate has
-- Be STRICT on hard requirements (German, backend language, DevOps)
+- Be STRICT on hard requirements (mandatory German, years of experience, backend language, DevOps)
 - Be FAIR on required vs nice-to-have distinction
 - Focus scoring on REQUIRED skills only, add bonus for nice-to-have
 """
@@ -312,7 +327,7 @@ def analyze_job_with_ai(job: Dict, user_profile: str, criteria: str) -> Optional
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a strict professional career advisor specializing in job matching. You must follow the matching criteria exactly. Be STRICT on hard requirements (German language, backend language, DevOps). CRITICAL GERMAN LANGUAGE RULE: A job written in German does NOT mean German is required. HOWEVER, you MUST disqualify if ANY of these German requirement signals appear anywhere in the job text: 'Sprachanforderungen', 'Deutsch - Fließend', 'Deutsch - Verhandlungssicher', 'Deutsch - Konversationssicher', 'Deutsch (C1)', 'Deutsch (C2)', 'Deutsch (B2)', 'Gutes Deutsch', 'Gute Deutschkenntnisse', 'Deutschkenntnisse', 'Deutsch erforderlich', 'Deutsch in Wort und Schrift', 'Fluent German', 'Fließend Deutsch'. Be FAIR on required vs nice-to-have skills. NEVER penalize missing nice-to-have skills. Provide SPECIFIC disqualification reasons based on the actual job requirements. Respond only with valid JSON."
+                    "content": "You are a strict professional career advisor specializing in job matching. Always parse each JD into 'what you'll do' and 'what they're looking for', then compare every item to the resume. Follow the matching criteria exactly. Be STRICT on hard requirements: mandatory German (semantic judgment only, no keyword lists; do not re-filter German-written JDs), years of experience (candidate has 7 years frontend and 1 year backend), backend language (Node.js ecosystem plus light Python only; Python-primary backend is a fail), and DevOps/SRE. Be FAIR on required vs nice-to-have skills. NEVER penalize missing nice-to-have skills. Respond only with valid JSON."
                 },
                 {
                     "role": "user",
@@ -334,6 +349,18 @@ def analyze_job_with_ai(job: Dict, user_profile: str, criteria: str) -> Optional
     except Exception as e:
         print(f"Error during AI analysis: {e}")
         return None
+
+
+def _normalize_breakdown(section) -> Dict:
+    """Coerce AI breakdown into {matched: [...], unmatched: [...]} lists."""
+    if not isinstance(section, dict):
+        return {"matched": [], "unmatched": []}
+    matched = section.get("matched") or []
+    unmatched = section.get("unmatched") or []
+    return {
+        "matched": [str(item).strip() for item in matched if str(item).strip()],
+        "unmatched": [str(item).strip() for item in unmatched if str(item).strip()],
+    }
 
 
 def save_matched_job(job: Dict, analysis: Dict) -> bool:
@@ -375,6 +402,8 @@ def save_matched_job(job: Dict, analysis: Dict) -> bool:
             "red_flags": analysis.get("red_flags", []),
             "nice_to_have_matches": analysis.get("nice_to_have_matches", []),  # New field
             "summary": analysis.get("summary", ""),
+            "what_youll_do": _normalize_breakdown(analysis.get("what_youll_do")),
+            "what_theyre_looking_for": _normalize_breakdown(analysis.get("what_theyre_looking_for")),
             
             # Metadata
             "status": "pending",  # pending, applied, rejected, interview
@@ -455,6 +484,18 @@ def process_new_jobs(limit: Optional[int] = None, source: Optional[str] = None):
         nice_to_have = analysis.get("nice_to_have_matches", [])
         if nice_to_have and len(nice_to_have) > 0:
             print(f"✨ Nice-to-have matches: {', '.join(nice_to_have[:3])}")
+
+        looking = _normalize_breakdown(analysis.get("what_theyre_looking_for"))
+        doing = _normalize_breakdown(analysis.get("what_youll_do"))
+        print(
+            f"What you'll do: {len(doing['matched'])} matched / {len(doing['unmatched'])} unmatched"
+        )
+        print(
+            f"What they're looking for: {len(looking['matched'])} matched / {len(looking['unmatched'])} unmatched"
+        )
+        if looking["unmatched"]:
+            preview = "; ".join(looking["unmatched"][:3])
+            print(f"  gaps: {preview}")
         
         # Save if meets threshold
         if match_score >= MATCH_THRESHOLD:
