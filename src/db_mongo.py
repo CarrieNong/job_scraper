@@ -335,6 +335,7 @@ def get_unmatched_jobs(
     date_to=None,
     score_min=None,
     score_max=None,
+    user_status=None,
 ):
     """
     Return AI-analyzed jobs that scored below the match threshold.
@@ -371,6 +372,8 @@ def get_unmatched_jobs(
 
     if source:
         filter_dict["source"] = source
+    if user_status == "watchlist":
+        filter_dict["user_status"] = "watchlist"
     if search:
         filter_dict["$or"] = [
             {"title": {"$regex": search, "$options": "i"}},

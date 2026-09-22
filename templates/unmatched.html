@@ -88,6 +88,22 @@
     .hidden-filter { display: none !important; }
     .count-label { color: var(--muted); font-size: .85rem; margin-left: auto; }
 
+    /* ── Date group header ────────────────────────────────────────── */
+    .date-group-header {
+      grid-column: 1 / -1;
+      display: flex; align-items: center; gap: 10px;
+      font-size: .8rem; font-weight: 700;
+      color: var(--muted);
+      padding: 12px 2px 6px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2px;
+    }
+    .date-group-header .dg-count {
+      font-weight: 500;
+      font-size: .75rem;
+      color: var(--border);
+    }
+
     .job-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
@@ -228,6 +244,59 @@
       border-color: var(--accent); color: var(--accent);
     }
     .page-info { color: var(--muted); font-size: .82rem; padding: 0 6px; }
+
+    /* ── Watchlist filter chip ──────────────────────────────────────── */
+    .watchlist-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: .8rem;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      color: var(--text);
+    }
+    .watchlist-chip:hover, .watchlist-chip.active {
+      border-color: #f59e0b; background: var(--surface2); color: #f59e0b;
+    }
+    .watchlist-dot { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; flex-shrink: 0; }
+    .watchlist-count { font-weight: 700; }
+
+    /* ── Status select on card ──────────────────────────────────────── */
+    .status-row { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+    .status-select {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 7px 10px;
+      font-size: .82rem;
+      cursor: pointer;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .status-select:focus { border-color: var(--accent); }
+    .status-select.s-watchlist { border-color: #f59e0b; color: #f59e0b; }
+
+    /* ── Toast ──────────────────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: .85rem;
+      box-shadow: 0 8px 32px #0008;
+      transform: translateY(80px); opacity: 0;
+      transition: transform .25s, opacity .25s;
+      pointer-events: none;
+      z-index: 999;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.ok   { border-color: #22c55e; color: #22c55e; }
+    .toast.err  { border-color: #ef4444; color: #ef4444; }
   </style>
 </head>
 <body>
@@ -247,6 +316,11 @@
     <option value="linkedin">LinkedIn</option>
     <option value="indeed">Indeed</option>
   </select>
+  <div class="watchlist-chip" id="watchlistChip" onclick="toggleWatchlistFilter()">
+    <span class="watchlist-dot"></span>
+    <span>⭐ 可投递</span>
+    <b class="watchlist-count" id="watchlistCount"></b>
+  </div>
   <select id="timePreset" onchange="onTimePresetChange()">
     <option value="all">全部时间</option>
     <option value="today">今天</option>
@@ -256,9 +330,9 @@
     <option value="custom">自定义时间</option>
   </select>
   <div class="filter-group hidden-filter" id="customDateGroup">
-    <input type="date" id="dateFrom" onchange="goPage(1)" />
+    <input type="date" id="dateFrom" />
     <span>至</span>
-    <input type="date" id="dateTo" onchange="goPage(1)" />
+    <input type="date" id="dateTo" />
   </div>
   <select id="scorePreset" onchange="onScorePresetChange()">
     <option value="all">全部分数</option>
@@ -280,10 +354,65 @@
 
 <div class="pager" id="pager"></div>
 
+<!-- ── Toast ───────────────────────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
 <script>
 let currentPage = 1;
 let debounceTimer = null;
+let dateDebounceTimer = null;
 const PAGE_SIZE = 20;
+let watchlistOnly = false;  // 只看「可投递」筛选状态
+
+/* ── Toast ───────────────────────────────────────────────────────── */
+function showToast(msg, type = 'ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => { t.className = 'toast'; }, 2500);
+}
+
+/* ── Watchlist filter toggle ─────────────────────────────────────── */
+function toggleWatchlistFilter() {
+  watchlistOnly = !watchlistOnly;
+  const chip = document.getElementById('watchlistChip');
+  chip.classList.toggle('active', watchlistOnly);
+  goPage(1);
+}
+
+/* ── Update unmatched job user_status ────────────────────────────── */
+async function updateUnmatchedStatus(select) {
+  const id         = select.dataset.id;
+  const userStatus = select.value;
+
+  select.className = `status-select${userStatus === 'watchlist' ? ' s-watchlist' : ''}`;
+
+  try {
+    const res = await fetch(`/api/unmatched-jobs/${id}/status`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ user_status: userStatus }),
+    });
+    if (!res.ok) throw new Error('请求失败');
+    const label = userStatus === 'watchlist' ? '⭐ 已标记为「可投递」' : '✅ 已取消标记';
+    showToast(label);
+    // If in watchlist-only mode, reload to reflect removal
+    if (watchlistOnly && userStatus !== 'watchlist') loadJobs();
+    else loadWatchlistCount();
+  } catch (err) {
+    showToast('❌ 标记失败', 'err');
+  }
+}
+
+/* ── Load watchlist count ────────────────────────────────────────── */
+async function loadWatchlistCount() {
+  try {
+    const res = await fetch('/api/unmatched-jobs?page_size=1&user_status=watchlist');
+    const data = await res.json();
+    const el = document.getElementById('watchlistCount');
+    if (el) el.textContent = data.total > 0 ? `(${data.total})` : '';
+  } catch (_) {}
+}
 
 function debounceLoad() {
   clearTimeout(debounceTimer);
@@ -305,7 +434,31 @@ function formatDate(date) {
 function onTimePresetChange() {
   const preset = document.getElementById('timePreset').value;
   document.getElementById('customDateGroup').classList.toggle('hidden-filter', preset !== 'custom');
-  goPage(1);
+  if (preset !== 'custom') {
+    goPage(1);  // Reload immediately for built-in presets
+  }
+  // For custom, reload is triggered only when user actually picks a date
+}
+
+/* ── Group jobs by date ──────────────────────────────────────────── */
+function formatGroupDate(dateStr) {
+  if (!dateStr) return '未知日期';
+  const today = formatDate(new Date());
+  const yd = new Date(); yd.setDate(yd.getDate() - 1);
+  const yesterday = formatDate(yd);
+  if (dateStr === today) return `今天 · ${dateStr}`;
+  if (dateStr === yesterday) return `昨天 · ${dateStr}`;
+  return dateStr;
+}
+
+function groupJobsByDate(jobs) {
+  const groups = new Map();
+  jobs.forEach(job => {
+    const dateStr = (job.matched_at || '').split(' ')[0] || '未知日期';
+    if (!groups.has(dateStr)) groups.set(dateStr, []);
+    groups.get(dateStr).push(job);
+  });
+  return [...groups.entries()];
 }
 
 function onScorePresetChange() {
@@ -424,8 +577,24 @@ function renderCard(job) {
     ${renderList('风险点', job.red_flags, 'bd-no')}
 
     <a class="btn-apply" href="${escHtml(job.link || '#')}" target="_blank" rel="noopener">查看原帖</a>
+
+    ${score >= 6.0 ? renderUnmatchedStatusSelect(job) : ''}
   `;
   return card;
+}
+
+/* ── Render status select for borderline (6-7) jobs ─────────────── */
+function renderUnmatchedStatusSelect(job) {
+  const userStatus = job.user_status || '';
+  return `
+    <div class="status-row">
+      <select class="status-select${userStatus === 'watchlist' ? ' s-watchlist' : ''}"
+              data-id="${job._id}"
+              onchange="updateUnmatchedStatus(this)">
+        <option value=""    ${userStatus === ''          ? 'selected' : ''}>📋 未标记</option>
+        <option value="watchlist" ${userStatus === 'watchlist' ? 'selected' : ''}>⭐ 可投递</option>
+      </select>
+    </div>`;
 }
 
 function renderPager(data) {
@@ -472,6 +641,7 @@ async function loadJobs() {
   if (dates.to) params.set('date_to', dates.to);
   if (scores.min !== '') params.set('score_min', scores.min);
   if (scores.max !== '') params.set('score_max', scores.max);
+  if (watchlistOnly) params.set('user_status', 'watchlist');
 
   try {
     const res = await fetch('/api/unmatched-jobs?' + params.toString());
@@ -492,7 +662,15 @@ async function loadJobs() {
       return;
     }
 
-    data.jobs.forEach(job => grid.appendChild(renderCard(job)));
+    // Group by date and render
+    const groups = groupJobsByDate(data.jobs);
+    groups.forEach(([dateStr, jobs]) => {
+      const hdr = document.createElement('div');
+      hdr.className = 'date-group-header';
+      hdr.innerHTML = `<span>${formatGroupDate(dateStr)}</span><span class="dg-count">${jobs.length} 个岗位</span>`;
+      grid.appendChild(hdr);
+      jobs.forEach(job => grid.appendChild(renderCard(job)));
+    });
     renderPager(data);
   } catch (err) {
     grid.innerHTML = `<div class="empty"><h2>加载失败</h2><p>${escHtml(err.message)}</p></div>`;
@@ -500,7 +678,18 @@ async function loadJobs() {
   }
 }
 
+// Date input listeners – debounced so the native picker doesn't fire mid-pick
+['dateFrom', 'dateTo'].forEach(id => {
+  document.getElementById(id).addEventListener('change', function() {
+    if (document.getElementById('timePreset').value === 'custom') {
+      clearTimeout(dateDebounceTimer);
+      dateDebounceTimer = setTimeout(() => goPage(1), 400);
+    }
+  });
+});
+
 loadJobs();
+loadWatchlistCount();
 </script>
 </body>
 </html>

@@ -19,6 +19,7 @@ from db_mongo import (
     get_scraper_stats,
     get_unmatched_jobs,
     count_unmatched_jobs,
+    _parse_filter_date,
 )
 
 load_dotenv()
@@ -37,6 +38,12 @@ STATUS_MAP = {
     "rejected":   "已拒绝",
     "interview":  "面试中",
     "unsuitable": "不符合",
+}
+
+# Unmatched jobs user_status mapping (for 6-7 score borderline jobs)
+UNMATCHED_USER_STATUS_MAP = {
+    "":           "未标记",
+    "watchlist":  "可投递",
 }
 
 # Chinese label → DB value (reverse mapping used nowhere yet, kept for clarity)
@@ -104,6 +111,8 @@ def api_jobs():
     status_filter = request.args.get("status")      # e.g. ?status=pending
     source_filter = request.args.get("source")      # e.g. ?source=linkedin
     search_query  = request.args.get("q", "").strip()
+    date_from     = request.args.get("date_from", "").strip() or None
+    date_to       = request.args.get("date_to", "").strip() or None
 
     query: dict = {}
     if status_filter and status_filter != "all":
@@ -115,6 +124,15 @@ def api_jobs():
             {"title":   {"$regex": search_query, "$options": "i"}},
             {"company": {"$regex": search_query, "$options": "i"}},
         ]
+    if date_from or date_to:
+        time_filter: dict = {}
+        start = _parse_filter_date(date_from)
+        end   = _parse_filter_date(date_to, end_of_day=True)
+        if start:
+            time_filter["$gte"] = start
+        if end:
+            time_filter["$lte"] = end
+        query["matched_at"] = time_filter
 
     jobs = list(collection.find(query).sort("matched_at", -1).limit(500))
     jobs = [_serialize(j) for j in jobs]
@@ -155,6 +173,8 @@ def api_unmatched_jobs():
     except (TypeError, ValueError):
         score_max = None
 
+    user_status_filter = request.args.get("user_status")  # "watchlist" or None
+
     jobs, total = get_unmatched_jobs(
         page=page,
         page_size=page_size,
@@ -165,6 +185,7 @@ def api_unmatched_jobs():
         date_to=date_to,
         score_min=score_min,
         score_max=score_max,
+        user_status=user_status_filter,
     )
     jobs = [_serialize(j) for j in jobs]
     pages = max(1, (total + page_size - 1) // page_size) if total else 1
@@ -216,6 +237,26 @@ def api_update_notes(job_id: str):
         return jsonify({"error": "Job not found"}), 404
 
     return jsonify({"ok": True})
+
+
+@app.route("/api/unmatched-jobs/<job_id>/status", methods=["PATCH"])
+def api_update_unmatched_status(job_id: str):
+    """Update user_status of an unmatched (borderline) job."""
+    data = request.get_json(silent=True) or {}
+    new_status = data.get("user_status", "")
+    if new_status not in UNMATCHED_USER_STATUS_MAP:
+        return jsonify({"error": f"Invalid user_status. Allowed: {list(UNMATCHED_USER_STATUS_MAP.keys())}"}), 400
+
+    collection = get_collection("jobs")
+    result = collection.update_one(
+        {"_id": ObjectId(job_id)},
+        {"$set": {"user_status": new_status, "updated_at": datetime.now()}}
+    )
+
+    if result.matched_count == 0:
+        return jsonify({"error": "Job not found"}), 404
+
+    return jsonify({"ok": True, "user_status": new_status})
 
 
 @app.route("/api/stats")

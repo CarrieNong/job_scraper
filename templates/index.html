@@ -142,6 +142,41 @@
     }
     .count-label { color: var(--muted); font-size: .85rem; margin-left: auto; }
 
+    /* Date filter inputs */
+    .toolbar input[type="date"],
+    .toolbar input[type="number"] {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 8px 12px;
+      font-size: .9rem;
+      outline: none;
+      color-scheme: dark;
+    }
+    .toolbar input[type="number"] { width: 78px; }
+    .filter-group {
+      display: flex; align-items: center; gap: 6px;
+      color: var(--muted); font-size: .8rem; white-space: nowrap;
+    }
+    .hidden-filter { display: none !important; }
+
+    /* ── Date group header ────────────────────────────────────────── */
+    .date-group-header {
+      grid-column: 1 / -1;
+      display: flex; align-items: center; gap: 10px;
+      font-size: .8rem; font-weight: 700;
+      color: var(--muted);
+      padding: 12px 2px 6px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2px;
+    }
+    .date-group-header .dg-count {
+      font-weight: 500;
+      font-size: .75rem;
+      color: var(--border);
+    }
+
     /* ── Job grid ─────────────────────────────────────────────────── */
     .job-grid {
       display: grid;
@@ -433,6 +468,19 @@
     <option value="linkedin">LinkedIn</option>
     <option value="indeed">Indeed</option>
   </select>
+  <select id="timePreset" onchange="onTimePresetChange()">
+    <option value="all">全部时间</option>
+    <option value="today">今天</option>
+    <option value="3">近 3 天</option>
+    <option value="7">近 7 天</option>
+    <option value="30">近 30 天</option>
+    <option value="custom">自定义时间</option>
+  </select>
+  <div class="filter-group hidden-filter" id="customDateGroup">
+    <input type="date" id="dateFrom" />
+    <span>至</span>
+    <input type="date" id="dateTo" />
+  </div>
   <span class="count-label" id="countLabel"></span>
 </div>
 
@@ -448,6 +496,7 @@
 /* ── State ───────────────────────────────────────────────────────── */
 let currentStatusFilter = 'all';
 let debounceTimer = null;
+let dateDebounceTimer = null;
 
 const STATUS_LABEL = {
   pending:    '未投递',
@@ -511,6 +560,61 @@ function setStatusFilter(status) {
 function debounceLoad() {
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(loadJobs, 350);
+}
+
+/* ── Date helpers ────────────────────────────────────────────────── */
+function formatDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function formatGroupDate(dateStr) {
+  if (!dateStr) return '未知日期';
+  const today = formatDate(new Date());
+  const yd = new Date(); yd.setDate(yd.getDate() - 1);
+  const yesterday = formatDate(yd);
+  if (dateStr === today) return `今天 · ${dateStr}`;
+  if (dateStr === yesterday) return `昨天 · ${dateStr}`;
+  return dateStr;
+}
+
+function onTimePresetChange() {
+  const preset = document.getElementById('timePreset').value;
+  document.getElementById('customDateGroup').classList.toggle('hidden-filter', preset !== 'custom');
+  if (preset !== 'custom') {
+    loadJobs();
+  }
+  // For custom, reload is triggered by the date input event listeners
+}
+
+function currentDateRange() {
+  const preset = document.getElementById('timePreset').value;
+  if (preset === 'all') return { from: '', to: '' };
+  if (preset === 'custom') {
+    return {
+      from: document.getElementById('dateFrom').value,
+      to:   document.getElementById('dateTo').value,
+    };
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (preset === 'today') return { from: formatDate(today), to: formatDate(today) };
+  const from = new Date(today);
+  from.setDate(today.getDate() - (Number(preset) - 1));
+  return { from: formatDate(from), to: formatDate(today) };
+}
+
+/* ── Group jobs by date ──────────────────────────────────────────── */
+function groupJobsByDate(jobs) {
+  const groups = new Map();
+  jobs.forEach(job => {
+    const dateStr = (job.matched_at || '').split(' ')[0] || '未知日期';
+    if (!groups.has(dateStr)) groups.set(dateStr, []);
+    groups.get(dateStr).push(job);
+  });
+  return [...groups.entries()];
 }
 
 /* ── Score badge class ───────────────────────────────────────────── */
@@ -607,6 +711,7 @@ async function loadJobs() {
   const grid   = document.getElementById('jobGrid');
   const search = document.getElementById('searchInput').value.trim();
   const source = document.getElementById('sourceFilter').value;
+  const dates  = currentDateRange();
 
   grid.innerHTML = '<div class="spinner"></div>';
 
@@ -614,6 +719,8 @@ async function loadJobs() {
   if (currentStatusFilter !== 'all') params.set('status', currentStatusFilter);
   if (source !== 'all') params.set('source', source);
   if (search) params.set('q', search);
+  if (dates.from) params.set('date_from', dates.from);
+  if (dates.to)   params.set('date_to',   dates.to);
 
   try {
     const res  = await fetch('/api/jobs?' + params.toString());
@@ -631,7 +738,15 @@ async function loadJobs() {
       return;
     }
 
-    data.jobs.forEach(job => grid.appendChild(renderCard(job)));
+    // Group by date and render
+    const groups = groupJobsByDate(data.jobs);
+    groups.forEach(([dateStr, jobs]) => {
+      const hdr = document.createElement('div');
+      hdr.className = 'date-group-header';
+      hdr.innerHTML = `<span>${formatGroupDate(dateStr)}</span><span class="dg-count">${jobs.length} 个岗位</span>`;
+      grid.appendChild(hdr);
+      jobs.forEach(job => grid.appendChild(renderCard(job)));
+    });
   } catch (err) {
     grid.innerHTML = `<div class="empty"><h2>加载失败</h2><p>${err.message}</p></div>`;
   }
@@ -691,6 +806,16 @@ function escHtml(str) {
 }
 
 /* ── Init ────────────────────────────────────────────────────────── */
+// Date input listeners – debounced so the native picker doesn't fire mid-pick
+['dateFrom', 'dateTo'].forEach(id => {
+  document.getElementById(id).addEventListener('change', function() {
+    if (document.getElementById('timePreset').value === 'custom') {
+      clearTimeout(dateDebounceTimer);
+      dateDebounceTimer = setTimeout(loadJobs, 400);
+    }
+  });
+});
+
 loadStats();
 loadJobs();
 </script>
