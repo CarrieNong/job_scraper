@@ -5,7 +5,7 @@
 # Configuration
 PROJECT_DIR="/Users/carrienon/Desktop/code-project/job_scraper"
 LOG_DIR="$PROJECT_DIR/logs"
-PYTHON="/opt/homebrew/bin/python3"
+PYTHON="/opt/miniconda3/bin/python3"
 
 # Create log directory if it doesn't exist
 mkdir -p "$LOG_DIR"

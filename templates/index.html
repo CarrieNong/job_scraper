@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job Tracker · 求职追踪</title>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --surface2:  #222533;
+      --border:    #2d3148;
+      --text:      #e2e6f0;
+      --muted:     #7b82a0;
+      --accent:    #6c8cff;
+
+      --pending:    #3b82f6;
+      --applied:    #22c55e;
+      --rejected:   #ef4444;
+      --interview:  #f59e0b;
+      --unsuitable: #8b5cf6;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Top nav ──────────────────────────────────────────────────── */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(15,17,23,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo { font-size: 1.1rem; font-weight: 700; letter-spacing: .03em; color: var(--accent); }
+
+    /* ── Stats bar ────────────────────────────────────────────────── */
+    .stats-bar {
+      display: flex; gap: 12px; flex-wrap: wrap;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .stat-chip {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: .8rem;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .stat-chip:hover, .stat-chip.active { border-color: var(--accent); background: var(--surface2); }
+    .stat-chip .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    .dot-all        { background: var(--accent); }
+    .dot-pending    { background: var(--pending); }
+    .dot-applied    { background: var(--applied); }
+    .dot-rejected   { background: var(--rejected); }
+    .dot-interview  { background: var(--interview); }
+    .dot-unsuitable { background: var(--unsuitable); }
+
+    /* ── Toolbar ──────────────────────────────────────────────────── */
+    .toolbar {
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .toolbar input[type="search"] {
+      flex: 1; min-width: 200px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 8px 14px;
+      font-size: .9rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .toolbar input[type="search"]:focus { border-color: var(--accent); }
+    .toolbar select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 8px 12px;
+      font-size: .9rem;
+      cursor: pointer;
+      outline: none;
+    }
+    .count-label { color: var(--muted); font-size: .85rem; margin-left: auto; }
+
+    /* ── Job grid ─────────────────────────────────────────────────── */
+    .job-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 16px;
+      padding: 20px 24px 40px;
+    }
+
+    /* ── Job card ─────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      display: flex; flex-direction: column; gap: 14px;
+      transition: border-color .2s, transform .15s, box-shadow .2s;
+      position: relative;
+    }
+    .card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent)22, 0 8px 32px #0008;
+      transform: translateY(-2px);
+    }
+
+    .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .card-title-block { flex: 1; min-width: 0; }
+    .card-title {
+      font-size: 1rem; font-weight: 600; line-height: 1.4;
+      color: var(--text);
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .card-company { font-size: .8rem; color: var(--muted); margin-top: 3px; }
+
+    .score-badge {
+      flex-shrink: 0;
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .85rem; font-weight: 700;
+      border: 2px solid;
+    }
+    .score-hi  { color: #22c55e; border-color: #22c55e33; background: #22c55e10; }
+    .score-mid { color: #f59e0b; border-color: #f59e0b33; background: #f59e0b10; }
+    .score-lo  { color: #ef4444; border-color: #ef444433; background: #ef444410; }
+
+    /* Meta row */
+    .card-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .meta-pill {
+      font-size: .72rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 8px;
+      color: var(--muted);
+    }
+    .source-pill { text-transform: capitalize; }
+
+    /* Summary */
+    .card-summary {
+      font-size: .82rem; color: var(--muted); line-height: 1.55;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* Apply button */
+    .btn-apply {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent);
+      color: #fff;
+      border: none; border-radius: 8px;
+      padding: 8px 14px;
+      font-size: .82rem; font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity .15s, transform .1s;
+      width: fit-content;
+    }
+    .btn-apply:hover { opacity: .88; transform: scale(1.02); }
+
+    /* Status select */
+    .status-row { display: flex; gap: 8px; align-items: center; }
+    .status-select {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 7px 10px;
+      font-size: .82rem;
+      cursor: pointer;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .status-select:focus { border-color: var(--accent); }
+    .status-select.s-pending    { border-color: var(--pending);    color: var(--pending); }
+    .status-select.s-applied    { border-color: var(--applied);    color: var(--applied); }
+    .status-select.s-rejected   { border-color: var(--rejected);   color: var(--rejected); }
+    .status-select.s-interview  { border-color: var(--interview);  color: var(--interview); }
+    .status-select.s-unsuitable { border-color: var(--unsuitable); color: var(--unsuitable); }
+
+    /* Notes */
+    .notes-wrap { display: flex; flex-direction: column; gap: 6px; }
+    .notes-textarea {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: .8rem;
+      line-height: 1.5;
+      resize: vertical;
+      min-height: 60px;
+      outline: none;
+      font-family: inherit;
+      transition: border-color .15s;
+    }
+    .notes-textarea:focus { border-color: var(--accent); }
+    .notes-textarea::placeholder { color: var(--muted); }
+    .btn-save {
+      align-self: flex-end;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      padding: 4px 12px;
+      font-size: .75rem;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-save:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-save.saved { border-color: #22c55e; color: #22c55e; }
+
+    /* ── Empty state ──────────────────────────────────────────────── */
+    .empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--muted);
+    }
+    .empty h2 { font-size: 1.2rem; margin-bottom: 8px; }
+
+    /* ── Loading ──────────────────────────────────────────────────── */
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 80px auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Toast ────────────────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: .85rem;
+      box-shadow: 0 8px 32px #0008;
+      transform: translateY(80px); opacity: 0;
+      transition: transform .25s, opacity .25s;
+      pointer-events: none;
+      z-index: 999;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.ok   { border-color: #22c55e; color: #22c55e; }
+    .toast.err  { border-color: #ef4444; color: #ef4444; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────── -->
+<header>
+  <span class="logo">💼 Job Tracker</span>
+  <button id="refreshBtn" class="btn-save" onclick="loadJobs()" style="padding:6px 14px;font-size:.82rem;">↻ 刷新</button>
+</header>
+
+<!-- ── Stats bar ───────────────────────────────────────────────────── -->
+<div class="stats-bar" id="statsBar">
+  <div class="stat-chip active" data-status="all"   onclick="setStatusFilter('all')">
+    <span class="dot dot-all"></span>
+    <span>全部 <b id="cnt-all">–</b></span>
+  </div>
+  <div class="stat-chip" data-status="pending"   onclick="setStatusFilter('pending')">
+    <span class="dot dot-pending"></span>
+    <span>未投递 <b id="cnt-pending">–</b></span>
+  </div>
+  <div class="stat-chip" data-status="applied"   onclick="setStatusFilter('applied')">
+    <span class="dot dot-applied"></span>
+    <span>已投递 <b id="cnt-applied">–</b></span>
+  </div>
+  <div class="stat-chip" data-status="interview" onclick="setStatusFilter('interview')">
+    <span class="dot dot-interview"></span>
+    <span>面试中 <b id="cnt-interview">–</b></span>
+  </div>
+  <div class="stat-chip" data-status="rejected"  onclick="setStatusFilter('rejected')">
+    <span class="dot dot-rejected"></span>
+    <span>已拒绝 <b id="cnt-rejected">–</b></span>
+  </div>
+  <div class="stat-chip" data-status="unsuitable" onclick="setStatusFilter('unsuitable')">
+    <span class="dot dot-unsuitable"></span>
+    <span>不符合 <b id="cnt-unsuitable">–</b></span>
+  </div>
+</div>
+
+<!-- ── Toolbar ─────────────────────────────────────────────────────── -->
+<div class="toolbar">
+  <input type="search" id="searchInput" placeholder="🔍 搜索职位 / 公司名…" oninput="debounceLoad()" />
+  <select id="sourceFilter" onchange="loadJobs()">
+    <option value="all">全部来源</option>
+    <option value="linkedin">LinkedIn</option>
+    <option value="indeed">Indeed</option>
+  </select>
+  <span class="count-label" id="countLabel"></span>
+</div>
+
+<!-- ── Job grid ────────────────────────────────────────────────────── -->
+<div class="job-grid" id="jobGrid">
+  <div class="spinner"></div>
+</div>
+
+<!-- ── Toast ───────────────────────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── State ───────────────────────────────────────────────────────── */
+let currentStatusFilter = 'all';
+let debounceTimer = null;
+
+const STATUS_LABEL = {
+  pending:    '未投递',
+  applied:    '已投递',
+  rejected:   '已拒绝',
+  interview:  '面试中',
+  unsuitable: '不符合',
+};
+
+/* ── Toast ───────────────────────────────────────────────────────── */
+function showToast(msg, type = 'ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => { t.className = 'toast'; }, 2500);
+}
+
+/* ── Stats bar ───────────────────────────────────────────────────── */
+async function loadStats() {
+  try {
+    const res = await fetch('/api/stats');
+    const data = await res.json();
+    document.getElementById('cnt-all').textContent = data.total;
+    for (const [status, cnt] of Object.entries(data.by_status)) {
+      const el = document.getElementById(`cnt-${status}`);
+      if (el) el.textContent = cnt;
+    }
+    // Zero-out others
+    ['pending','applied','rejected','interview','unsuitable'].forEach(s => {
+      if (!data.by_status[s]) {
+        const el = document.getElementById(`cnt-${s}`);
+        if (el) el.textContent = 0;
+      }
+    });
+  } catch (_) {}
+}
+
+/* ── Status filter ───────────────────────────────────────────────── */
+function setStatusFilter(status) {
+  currentStatusFilter = status;
+  document.querySelectorAll('.stat-chip').forEach(el => {
+    el.classList.toggle('active', el.dataset.status === status);
+  });
+  loadJobs();
+}
+
+/* ── Debounce search ─────────────────────────────────────────────── */
+function debounceLoad() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(loadJobs, 350);
+}
+
+/* ── Score badge class ───────────────────────────────────────────── */
+function scoreCls(score) {
+  if (score >= 8)  return 'score-hi';
+  if (score >= 6)  return 'score-mid';
+  return 'score-lo';
+}
+
+/* ── Render card ─────────────────────────────────────────────────── */
+function renderCard(job) {
+  const score  = (job.match_score || 0).toFixed(1);
+  const status = job.status || 'pending';
+  const matchReasons = (job.match_reasons || []).slice(0, 3).map(r => `<li>${r}</li>`).join('');
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.id = `card-${job._id}`;
+
+  card.innerHTML = `
+    <div class="card-header">
+      <div class="card-title-block">
+        <div class="card-title">${escHtml(job.title || '（无标题）')}</div>
+        <div class="card-company">${escHtml(job.company || '')}${job.location ? ' · ' + escHtml(job.location) : ''}</div>
+      </div>
+      <div class="score-badge ${scoreCls(job.match_score || 0)}">${score}</div>
+    </div>
+
+    <div class="card-meta">
+      <span class="meta-pill source-pill">${escHtml(job.source || '')}</span>
+      ${job.matched_at ? `<span class="meta-pill">📅 ${job.matched_at}</span>` : ''}
+      ${job.applicants ? `<span class="meta-pill">👥 ${escHtml(job.applicants)}</span>` : ''}
+    </div>
+
+    ${job.summary ? `<div class="card-summary">${escHtml(job.summary)}</div>` : ''}
+
+    ${matchReasons ? `<ul style="font-size:.78rem;color:var(--muted);padding-left:16px;line-height:1.6;">${matchReasons}</ul>` : ''}
+
+    <a class="btn-apply" href="${escHtml(job.link || '#')}" target="_blank" rel="noopener">
+      🚀 前往投递
+    </a>
+
+    <div class="status-row">
+      <select class="status-select s-${status}" data-id="${job._id}" onchange="updateStatus(this)">
+        <option value="pending"    ${status==='pending'    ? 'selected':''}>📋 未投递</option>
+        <option value="applied"    ${status==='applied'    ? 'selected':''}>✅ 已投递</option>
+        <option value="interview"  ${status==='interview'  ? 'selected':''}>🤝 面试中</option>
+        <option value="rejected"   ${status==='rejected'   ? 'selected':''}>❌ 已拒绝</option>
+        <option value="unsuitable" ${status==='unsuitable' ? 'selected':''}>🚫 不符合</option>
+      </select>
+    </div>
+
+    <div class="notes-wrap">
+      <textarea
+        class="notes-textarea"
+        data-id="${job._id}"
+        placeholder="备注：面试后拒绝 / 直接拒绝 / 薪资不符…"
+        rows="2"
+      >${escHtml(job.notes || '')}</textarea>
+      <button class="btn-save" data-id="${job._id}" onclick="saveNotes(this)">保存备注</button>
+    </div>
+  `;
+  return card;
+}
+
+/* ── Load jobs ───────────────────────────────────────────────────── */
+async function loadJobs() {
+  const grid   = document.getElementById('jobGrid');
+  const search = document.getElementById('searchInput').value.trim();
+  const source = document.getElementById('sourceFilter').value;
+
+  grid.innerHTML = '<div class="spinner"></div>';
+
+  const params = new URLSearchParams();
+  if (currentStatusFilter !== 'all') params.set('status', currentStatusFilter);
+  if (source !== 'all') params.set('source', source);
+  if (search) params.set('q', search);
+
+  try {
+    const res  = await fetch('/api/jobs?' + params.toString());
+    const data = await res.json();
+
+    grid.innerHTML = '';
+    document.getElementById('countLabel').textContent = `共 ${data.total} 条`;
+
+    if (!data.jobs.length) {
+      grid.innerHTML = `
+        <div class="empty">
+          <h2>暂无匹配的职位</h2>
+          <p>换个筛选条件试试？</p>
+        </div>`;
+      return;
+    }
+
+    data.jobs.forEach(job => grid.appendChild(renderCard(job)));
+  } catch (err) {
+    grid.innerHTML = `<div class="empty"><h2>加载失败</h2><p>${err.message}</p></div>`;
+  }
+}
+
+/* ── Update status ───────────────────────────────────────────────── */
+async function updateStatus(select) {
+  const id     = select.dataset.id;
+  const status = select.value;
+
+  // Update style immediately
+  select.className = `status-select s-${status}`;
+
+  try {
+    const res = await fetch(`/api/jobs/${id}/status`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({status}),
+    });
+    if (!res.ok) throw new Error('请求失败');
+    showToast(`✅ 状态已更新为「${STATUS_LABEL[status]}」`);
+    loadStats();
+  } catch (err) {
+    showToast('❌ 状态更新失败', 'err');
+  }
+}
+
+/* ── Save notes ──────────────────────────────────────────────────── */
+async function saveNotes(btn) {
+  const id    = btn.dataset.id;
+  const card  = document.getElementById(`card-${id}`);
+  const notes = card.querySelector('.notes-textarea').value;
+
+  try {
+    const res = await fetch(`/api/jobs/${id}/notes`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({notes}),
+    });
+    if (!res.ok) throw new Error('请求失败');
+    btn.textContent = '已保存 ✓';
+    btn.classList.add('saved');
+    setTimeout(() => { btn.textContent = '保存备注'; btn.classList.remove('saved'); }, 2000);
+    showToast('📝 备注已保存');
+  } catch (err) {
+    showToast('❌ 备注保存失败', 'err');
+  }
+}
+
+/* ── Escape HTML helper ──────────────────────────────────────────── */
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/* ── Init ────────────────────────────────────────────────────────── */
+loadStats();
+loadJobs();
+</script>
+</body>
+</html>
