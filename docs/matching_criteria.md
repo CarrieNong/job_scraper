@@ -69,13 +69,21 @@ Nice-to-have year requirements do not disqualify.
 ## Technical Stack Matching
 
 ### Frontend Frameworks (High Priority) ✅
-**Core Competencies**: React, Angular, Vue (7 years experience)
+**Core Competencies**: React, Angular, Vue (7 years experience); strong vanilla JavaScript / ES6+ foundation throughout.
 
 - **Full Match**: If JD requires ANY of these:
   - **React ecosystem**: React, Next.js, Redux, React Query, Zustand, React Router, etc.
   - **Vue ecosystem**: Vue, Nuxt.js, Vuex, Pinia, Vue Router, etc.
   - **Angular ecosystem**: Angular, RxJS, NgRx, Angular Material, etc.
   - **Shared tools**: TypeScript, JavaScript, Tailwind CSS, CSS-in-JS, Webpack, Vite, etc.
+  - **Vanilla / framework-agnostic JS roles**: If the JD primarily requires JavaScript/ES6+ skills (vanilla JS, DOM manipulation, browser APIs) rather than a specific proprietary framework, treat this as a FULL match — the candidate has 7 years of JavaScript development including vanilla JS.
+
+- **Partial Match (treat as Good Match, ~7 points base)**: If JD uses a less common or legacy frontend framework (CanJS, Backbone, Ember, Knockout, Mootools, etc.) but:
+  - Also lists React, Angular, Vue, or similar as reference keywords or "similar technologies", OR
+  - The primary requirement is strong JavaScript / frontend engineering skill (framework is secondary / learnable)
+  → Do NOT disqualify or heavily penalize. The candidate's 7 years of React/Vue/Angular + vanilla JS demonstrates framework-agnostic frontend engineering ability. These frameworks share the same JS foundations and are learnable. Score based on how well other requirements (JS depth, Node.js, CSS, architecture, etc.) match — framework gap is at most a minor deduction (-0.5 to -1 point), not a disqualifier.
+
+- **Note on build tools**: Grunt/Gulp experience is NOT required — but the candidate's Webpack/Vite/npm-scripts experience covers the same responsibility (frontend build tooling). Do NOT penalize for Grunt/Gulp mismatch; treat as equivalent skill.
 
 ### Backend Experience Level ✅
 **Actual Experience**: 1 year of full-stack/backend with Node.js
@@ -108,8 +116,8 @@ Nice-to-have year requirements do not disqualify.
 - Previous: B2B SaaS, B2C e-commerce, startup environments
 
 ### Position Level Match:
-- **High Match (8-10)**: Junior to Senior Frontend Developer, Full-Stack Developer (Frontend-focused)
-- **Medium Match (5-7)**: Senior Full-Stack Developer (if backend is Node.js or not emphasized)
+- **High Match (8-10)**: Junior to Senior Frontend Developer, Full-Stack Developer (Frontend-focused), JavaScript Developer (vanilla JS / framework-agnostic)
+- **Medium Match (5-7)**: Senior Full-Stack Developer (if backend is Node.js or not emphasized), Frontend roles using legacy/niche frameworks where JS fundamentals are the core requirement
 - **Low Match (≤4)**: 
   - Staff/Principal Engineer requiring 10+ years
   - Backend-focused positions (>70% backend work)
@@ -230,6 +238,8 @@ Evaluate ONLY "required" or "mandatory" skills:
 
 - ✅ Frontend-focused or frontend-heavy (>60%) full-stack roles
 - ✅ Modern JavaScript/TypeScript stack (React/Vue/Angular)
+- ✅ Vanilla JS / framework-agnostic JavaScript developer roles (candidate has 7 years of JS)
+- ✅ Roles where primary skill is "strong JavaScript" even if framework is niche/legacy (CanJS, Backbone, etc.)
 - ✅ Node.js backend (if backend required)
 - ✅ Component library or design system work
 - ✅ Performance optimization focus

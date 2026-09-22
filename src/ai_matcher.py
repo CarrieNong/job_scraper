@@ -146,14 +146,20 @@ These two breakdowns MUST appear in the JSON. They are independent of scoring: s
 
 ### STEP 2: Required Skills Match (Base Score: 4-8)
 Evaluate ONLY skills marked as "required" or "mandatory" in JD:
-- Frontend frameworks: React/Vue/Angular (candidate has 7 years)
+- Frontend frameworks: React/Vue/Angular (candidate has 7 years); candidate also has strong vanilla JS / ES6+ throughout
 - Experience level match
 - Required technical stack alignment
 - Role focus (frontend vs backend split)
 
+**IMPORTANT — JavaScript / vanilla JS roles**:
+- If the JD is primarily a frontend JavaScript role (vanilla JS, DOM, browser APIs) rather than requiring a specific proprietary framework, count the candidate's 7 years of JS development as a FULL match for the JS requirement.
+- If the JD uses a niche/legacy framework (CanJS, Backbone, Ember, Knockout, etc.) but also lists React, Angular, or Vue as reference keywords or the core requirement is "strong JavaScript", do NOT heavily penalize. The framework gap is at most −0.5 to −1 point on the base score. The candidate's deep React/Vue/Angular + vanilla JS background demonstrates the same fundamental frontend engineering skills.
+- Build tool equivalence: Candidate's Webpack/Vite = Grunt/Gulp for scoring purposes (both are frontend build tooling). Do NOT deduct for this difference.
+- Test framework equivalence: Candidate's Jest/Cypress ≈ Mocha/Chai. Do NOT deduct.
+
 **Scoring Guide**:
 - 8: 90%+ required skills match
-- 7: 70-89% required skills match
+- 7: 70-89% required skills match (includes: strong JS match + minor framework difference)
 - 6: 50-69% required skills match
 - 5: 40-49% required skills match
 - 4: 30-39% required skills match
@@ -295,7 +301,7 @@ def analyze_job_with_ai(job: Dict, user_profile: str, criteria: str) -> Optional
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a strict professional career advisor specializing in job matching. Always parse each JD into 'what you'll do' and 'what they're looking for', then compare every item to the resume. Follow the matching criteria exactly. Be STRICT on hard requirements: mandatory German (semantic judgment only, no keyword lists; do not re-filter German-written JDs), years of experience (candidate has 7 years frontend and 1 year backend), backend language (Node.js ecosystem plus light Python only; Python-primary backend is a fail), and DevOps/SRE. Be FAIR on required vs nice-to-have skills. NEVER penalize missing nice-to-have skills. Respond only with valid JSON."
+                    "content": "You are a strict professional career advisor specializing in job matching. Always parse each JD into 'what you'll do' and 'what they're looking for', then compare every item to the resume. Follow the matching criteria exactly. Be STRICT on hard requirements: mandatory German (semantic judgment only, no keyword lists; do not re-filter German-written JDs), years of experience (candidate has 7 years frontend and 1 year backend), backend language (Node.js ecosystem plus light Python only; Python-primary backend is a fail), and DevOps/SRE. Be FAIR on required vs nice-to-have skills. NEVER penalize missing nice-to-have skills. IMPORTANT for JavaScript/frontend roles: (1) If a JD primarily requires vanilla JS / strong JavaScript skills, treat the candidate's 7 years of JS development as a FULL match. (2) If a JD uses a niche/legacy framework (CanJS, Backbone, Ember, etc.) but lists React/Angular/Vue as reference keywords OR the core requirement is strong JavaScript, do NOT heavily penalize — the framework gap is at most −0.5 to −1 point; these are learnable given deep JS fundamentals. (3) Webpack/Vite = Grunt/Gulp for scoring (same build tooling responsibility). (4) Jest/Cypress ≈ Mocha/Chai for scoring. Respond only with valid JSON."
                 },
                 {
                     "role": "user",
