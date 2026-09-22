@@ -14,18 +14,31 @@
   - ❌ **DO NOT** disqualify just because the JD is written in German language
   - ✅ **ONLY** disqualify if German is explicitly listed in the requirements/qualifications section
   
-  **Keywords that indicate German is REQUIRED** (must appear in requirements section):
-  - "German required" / "Deutsch erforderlich"
+  **DISQUALIFY if ANY of these appear anywhere in the job description**:
+  
+  *Explicit requirement keywords:*
+  - "German required" / "Deutsch erforderlich" / "Deutsch ist erforderlich"
   - "Deutschkenntnisse erforderlich" / "German skills required"
   - "German mandatory" / "Deutsch zwingend erforderlich"
-  - "Fluent German" / "Fließend Deutsch"
-  - "German B2+", "German C1", "Native German speaker"
+  - "Deutsch ist Voraussetzung" / "German is a must"
   - "Sehr gute Deutschkenntnisse erforderlich"
-  - "German is a must" / "Deutsch ist Voraussetzung"
+  
+  *Language level declarations (these always mean German IS required):*
+  - "Deutsch - Fließend" / "Deutsch - Verhandlungssicher" / "Deutsch - Konversationssicher"
+  - "Deutsch - Grundkenntnisse" / "Deutsch - Muttersprache"
+  - "Sprachanforderungen" / "Sprachanforderung" (= language requirements section header)
+  - "Fluent German" / "Fließend Deutsch" / "Fließende Deutschkenntnisse"
+  - "German C1" / "German C2" / "German B2" / "Deutsch (C1)" / "Deutsch (C2)" / "Deutsch (B2)"
+  - "Native German" / "Muttersprache Deutsch" / "Deutsch auf Muttersprachniveau"
+  
+  *General proficiency requirements:*
+  - "Gute Deutschkenntnisse" / "Gutes Deutsch" / "Sehr gute Deutschkenntnisse"
+  - "Deutschkenntnisse" (when in requirements/Anforderungen/Qualifikationen section)
+  - "Deutsch in Wort und Schrift"
   
   **DO NOT disqualify if**:
-  - JD is written in German but doesn't mention German as a requirement
-  - German is listed as "nice to have", "preferred", "plus", or "bonus"
+  - JD is written in German but none of the above signals appear
+  - German is explicitly "nice to have" / "von Vorteil" / "wünschenswert"
   - German appears only in company description, not in job requirements
 
 ### 2. Backend Language Requirements - MANDATORY CHECK
@@ -210,7 +223,7 @@ Evaluate ONLY "required" or "mandatory" skills:
 
 ## Red Flags (Automatic Low Match)
 
-- ❌ German language mandatory
+- ❌ German language mandatory (any form: Sprachanforderungen, Gutes Deutsch, Deutsch - Fließend/C1/C2, etc.)
 - ❌ Backend-heavy roles (>70% backend) with non-Node.js stack
 - ❌ Non-Node.js backend explicitly required as mandatory
 - ❌ 5+ years backend experience explicitly required

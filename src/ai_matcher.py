@@ -5,6 +5,8 @@ Uses AI to analyze job listings and match them with user profile and preferences
 """
 import sys
 import os
+import re
+import html as html_module
 from datetime import datetime
 from typing import List, Dict, Optional
 
@@ -29,6 +31,37 @@ load_dotenv()
 AI_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")  # or "claude-3-5-sonnet-20241022"
 AI_API_KEY = os.getenv("OPENAI_API_KEY")  # or ANTHROPIC_API_KEY
 MATCH_THRESHOLD = float(os.getenv("MATCH_THRESHOLD", "7.0"))  # Minimum match score (0-10)
+
+
+def strip_html(html_text: str) -> str:
+    """
+    Convert raw HTML to plain text.
+    - Removes all tags
+    - Decodes HTML entities (&amp; → &, &lt; → <, etc.)
+    - Collapses excessive whitespace / blank lines
+    
+    Args:
+        html_text: Raw HTML string
+        
+    Returns:
+        Clean plain-text string
+    """
+    if not html_text:
+        return ""
+    # Remove <style> and <script> blocks entirely
+    text = re.sub(r'<(style|script)[^>]*>.*?</\1>', '', html_text, flags=re.DOTALL | re.IGNORECASE)
+    # Replace block-level tags with newlines so paragraphs/list items stay readable
+    text = re.sub(r'<(br|p|li|h[1-6]|div|tr)[^>]*>', '\n', text, flags=re.IGNORECASE)
+    # Strip remaining tags
+    text = re.sub(r'<[^>]+>', '', text)
+    # Decode HTML entities
+    text = html_module.unescape(text)
+    # Collapse multiple blank lines into one
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    # Strip leading/trailing whitespace per line
+    lines = [line.strip() for line in text.splitlines()]
+    text = '\n'.join(line for line in lines if line)
+    return text.strip()
 
 
 def load_user_profile(profile_path: str = "docs/user_profile.md") -> str:
@@ -79,7 +112,9 @@ def build_matching_prompt(job: Dict, user_profile: str, criteria: str) -> str:
     Returns:
         Formatted prompt string
     """
-    job_description = job.get("description", "")[:4000]  # Limit description length
+    # Strip HTML tags first so the character budget covers actual text, not markup
+    raw_description = job.get("description", "")
+    job_description = strip_html(raw_description)[:6000]
     
     prompt = f"""You are a professional career advisor. Analyze if this job posting matches the candidate's profile and preferences.
 
@@ -107,21 +142,34 @@ def build_matching_prompt(job: Dict, user_profile: str, criteria: str) -> str:
 1. **German Language Check**:
    **CRITICAL DISTINCTION**: 
    - ❌ DO NOT disqualify just because the JD is written in German language
-   - ✅ ONLY disqualify if German is explicitly listed as a JOB REQUIREMENT in the requirements/qualifications section
+   - ✅ ONLY disqualify if German is explicitly listed as a JOB REQUIREMENT
    
-   **Check if German appears in the REQUIREMENTS section with keywords like**:
-   - "German required" / "Deutsch erforderlich"
-   - "Deutschkenntnisse erforderlich" / "German skills required"  
+   **DISQUALIFY (score ≤ 3) if ANY of the following appear anywhere in the job text**:
+   
+   *Explicit requirement keywords:*
+   - "German required" / "Deutsch erforderlich" / "Deutsch ist erforderlich"
+   - "Deutschkenntnisse erforderlich" / "German skills required"
    - "German mandatory" / "Deutsch zwingend erforderlich"
-   - "Fluent German" / "Fließend Deutsch"
-   - "German B2+", "German C1", "Native German speaker"
+   - "Deutsch ist Voraussetzung" / "German is a must"
    - "Sehr gute Deutschkenntnisse erforderlich"
-   - "German is a must" / "Deutsch ist Voraussetzung"
+   
+   *Language level declarations (these always mean German IS required):*
+   - "Deutsch - Fließend" / "Deutsch - Verhandlungssicher" / "Deutsch - Konversationssicher"
+   - "Deutsch - Grundkenntnisse" / "Deutsch - Muttersprache"
+   - "Sprachanforderungen" / "Sprachanforderung" (language requirements section)
+   - "Fluent German" / "Fließend Deutsch" / "Fließende Deutschkenntnisse"
+   - "German C1" / "German C2" / "German B2" / "Deutsch (C1)" / "Deutsch (C2)" / "Deutsch (B2)"
+   - "Native German" / "Muttersprache Deutsch" / "Deutsch auf Muttersprachniveau"
+   
+   *General proficiency requirements:*
+   - "Gute Deutschkenntnisse" / "Gutes Deutsch" / "Sehr gute Deutschkenntnisse"
+   - "Deutschkenntnisse" (when listed under requirements/Anforderungen/Qualifikationen)
+   - "Deutsch in Wort und Schrift"
    
    **Decision**:
-   - ❌ If German is listed as REQUIRED in job requirements → DISQUALIFY (score ≤ 3)
-   - ✅ If JD is in German but doesn't list German as requirement → PASS
-   - ✅ If German is "nice to have" or not mentioned → PASS
+   - ❌ If ANY of the above is found → DISQUALIFY (score ≤ 3)
+   - ✅ If JD is written in German but none of the above appear → PASS
+   - ✅ If German is explicitly "nice to have" / "von Vorteil" → PASS
 
 2. **Backend Language Check** (ONLY if backend is explicitly required):
    - Does JD explicitly require a specific backend language as mandatory?
@@ -264,7 +312,7 @@ def analyze_job_with_ai(job: Dict, user_profile: str, criteria: str) -> Optional
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a strict professional career advisor specializing in job matching. You must follow the matching criteria exactly. Be STRICT on hard requirements (German language, backend language, DevOps). CRITICAL GERMAN LANGUAGE RULE: A job written in German does NOT mean German is required - you must look for EXPLICIT keywords like 'German required', 'Deutsch erforderlich', 'Fluent German', 'German B2+' in the REQUIREMENTS section. If these keywords are NOT present, do NOT disqualify for German. Be FAIR on required vs nice-to-have skills. NEVER penalize missing nice-to-have skills. Provide SPECIFIC disqualification reasons based on the actual job requirements, not generic examples. Respond only with valid JSON."
+                    "content": "You are a strict professional career advisor specializing in job matching. You must follow the matching criteria exactly. Be STRICT on hard requirements (German language, backend language, DevOps). CRITICAL GERMAN LANGUAGE RULE: A job written in German does NOT mean German is required. HOWEVER, you MUST disqualify if ANY of these German requirement signals appear anywhere in the job text: 'Sprachanforderungen', 'Deutsch - Fließend', 'Deutsch - Verhandlungssicher', 'Deutsch - Konversationssicher', 'Deutsch (C1)', 'Deutsch (C2)', 'Deutsch (B2)', 'Gutes Deutsch', 'Gute Deutschkenntnisse', 'Deutschkenntnisse', 'Deutsch erforderlich', 'Deutsch in Wort und Schrift', 'Fluent German', 'Fließend Deutsch'. Be FAIR on required vs nice-to-have skills. NEVER penalize missing nice-to-have skills. Provide SPECIFIC disqualification reasons based on the actual job requirements. Respond only with valid JSON."
                 },
                 {
                     "role": "user",
