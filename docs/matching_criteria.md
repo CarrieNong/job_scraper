@@ -28,20 +28,30 @@ Do **not** invent "Fluency in German" (or similar) as a requirement if the JD ne
 
 ### 2. Backend Language Requirements - MANDATORY CHECK
 Candidate backend:
-- ✅ **Strong**: Node.js ecosystem (Express.js, Nest.js, Fastify, Koa, etc.)
-- ⚠️ **Light**: a little Python — **not** enough for a Python-primary backend role
-- ❌ **Does not know**: Java, Go, PHP, Ruby, C#, .NET, Scala, Rust, Kotlin, etc.
+- ✅ **Strong / known**: Node.js ecosystem (Express.js, Nest.js, Fastify, Koa, etc.), TypeScript/JavaScript on the backend
+- ⚠️ **Light**: a little Python — **not** enough when Python is the **only** / primary backend
+- ❌ **Does not know**: Java, Go, PHP, Ruby, C#, .NET, Scala, Rust, Kotlin, etc. (and Python as a primary backend)
 
-**DISQUALIFY** if a backend language the candidate cannot do is a **hard/mandatory** requirement, including:
-- Python / Django / Flask / FastAPI as the required backend
-- Java / Spring, Go, PHP, Ruby, C#, .NET, or similar as the required backend
+**DISQUALIFY (score ≤ 3) ONLY if**:
+- The JD's **only** / **clearly primary** mandatory backend is a language the candidate does not know (e.g. Python-only, Java-only, Go-only), **AND**
+- Node.js / TypeScript-backend / JavaScript-backend is **not** listed as an accepted or required option
 
-**DO NOT DISQUALIFY if**:
+**DO NOT DISQUALIFY — treat as approximate / reviewable match (score ≥ 7.0 when other skills largely fit)** if:
+- The JD lists **both** a known stack (Node.js / TypeScript / JavaScript backend) **and** an unknown one (Python, Java, Go, etc.) as required or as the tech stack
+- Examples that must PASS as approximate match (not ≤3):
+  - "Python, TypeScript, and modern web technologies"
+  - "Backend in Node.js or Python"
+  - "Experience with Python and/or Node.js"
+  - Full-stack with React + "Python / TypeScript"
+- In these cases: continue normal scoring, deduct modestly for the unknown language (−0.5 to −1.5 from base), put the gap clearly in `red_flags`, `missing_requirements`, `what_theyre_looking_for.unmatched`, and `summary` so the candidate can decide whether to apply
+- Recommendation should be **"Maybe"** (not hard No) when the unknown language is the main caveat
+
+**Also DO NOT DISQUALIFY if**:
 - No backend language is required
 - Backend is "nice to have" / "plus"
 - Frontend-focused role with optional backend
-- Required backend is Node.js
-- Python is only mentioned as nice-to-have
+- Required backend is Node.js / TypeScript / JavaScript only
+- Python (or another unknown language) is only mentioned as nice-to-have
 
 ### 3. Years of Experience - MANDATORY CHECK
 Candidate:
@@ -175,7 +185,7 @@ Nice-to-have year requirements do not disqualify.
 
 ### STEP 1: Hard Requirements Check (DISQUALIFY = Score ≤ 3)
 1. ❌ German is an **explicitly written** mandatory job-language requirement? → DISQUALIFY. Location/office in Germany or Berlin is NOT enough.
-2. ❌ Hard-required backend language is not Node.js (Python-primary, Java, Go, etc.)? → DISQUALIFY
+2. ❌ Backend language: **only** an unknown stack is mandatory (Python-only / Java-only / Go-only, etc.) with **no** Node.js / TypeScript / JS backend option? → DISQUALIFY. If unknown language **and** known language both appear → do **not** disqualify; score as approximate match (≥ 7.0 when other skills largely fit) and explain the gap.
 3. ❌ Must-have years of experience exceed candidate years (7 frontend / 1 backend)? → DISQUALIFY
 4. ❌ DevOps/SRE required as core role? → DISQUALIFY
 
@@ -232,8 +242,8 @@ Evaluate ONLY "required" or "mandatory" skills:
 ## Red Flags (Automatic Low Match)
 
 - ❌ German language **explicitly** mandatory in the JD (nice-to-have German is OK; Berlin/Germany location alone is NOT a red flag)
-- ❌ Backend-heavy roles (>70% backend) with non-Node.js stack
-- ❌ Non-Node.js backend explicitly required as mandatory (including Python-primary)
+- ❌ Backend-heavy roles (>70% backend) with **only** a non-Node.js stack (no Node/TS/JS option) → hard fail
+- ⚠️ Mixed backend stack (e.g. Python + TypeScript/Node): **not** a hard fail — flag in `red_flags` / summary as approximate match for human review
 - ❌ Must-have years exceed candidate years (7 frontend / 1 backend)
 - ❌ 5+ years backend experience explicitly required
 - ❌ Heavy DevOps/infrastructure as core responsibility
@@ -270,7 +280,8 @@ Evaluate ONLY "required" or "mandatory" skills:
 5. **Final Score** → Sum all components (max 10)
 
 **Key Principles**:
-- Be STRICT on hard requirements (explicit mandatory German only — never infer from Berlin/Germany location, backend language, years of experience, DevOps)
+- Be STRICT on hard requirements (explicit mandatory German only — never infer from Berlin/Germany location; years of experience; DevOps; backend **only** when the sole mandatory backend is unknown with no Node/TS/JS option)
+- Mixed backend stacks (known + unknown language) → approximate match for human review, not auto-reject
 - Focus on REQUIRED skills only for base scoring
 - NEVER penalize missing "nice to have" skills
 - DO reward having "nice to have" skills with modest bonus
