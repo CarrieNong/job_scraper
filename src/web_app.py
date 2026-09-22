@@ -14,7 +14,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
-from db_mongo import get_collection, get_scraper_stats
+from db_mongo import (
+    get_collection,
+    get_scraper_stats,
+    get_unmatched_jobs,
+    count_unmatched_jobs,
+)
 
 load_dotenv()
 
@@ -36,6 +41,9 @@ STATUS_MAP = {
 
 # Chinese label → DB value (reverse mapping used nowhere yet, kept for clarity)
 STATUS_REVERSE = {v: k for k, v in STATUS_MAP.items()}
+
+MATCH_THRESHOLD = float(os.getenv("MATCH_THRESHOLD", "7.0"))
+UNMATCHED_PAGE_SIZE = 20
 
 
 def _normalize_link(job: dict) -> str:
@@ -82,6 +90,11 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/unmatched")
+def unmatched():
+    return render_template("unmatched.html")
+
+
 @app.route("/api/jobs")
 def api_jobs():
     """Return all matched jobs, newest first."""
@@ -107,6 +120,64 @@ def api_jobs():
     jobs = [_serialize(j) for j in jobs]
 
     return jsonify({"jobs": jobs, "total": len(jobs)})
+
+
+@app.route("/api/unmatched-jobs")
+def api_unmatched_jobs():
+    """Return AI-rejected jobs from the original jobs collection, paginated."""
+    try:
+        page = int(request.args.get("page", 1))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        page_size = int(request.args.get("page_size", UNMATCHED_PAGE_SIZE))
+    except (TypeError, ValueError):
+        page_size = UNMATCHED_PAGE_SIZE
+    page_size = max(1, min(page_size, 50))
+
+    source_filter = request.args.get("source")
+    if source_filter == "all":
+        source_filter = None
+    search_query = request.args.get("q", "").strip()
+    date_from = request.args.get("date_from", "").strip() or None
+    date_to = request.args.get("date_to", "").strip() or None
+
+    score_min = None
+    score_max = None
+    try:
+        if request.args.get("score_min") not in (None, ""):
+            score_min = float(request.args.get("score_min"))
+    except (TypeError, ValueError):
+        score_min = None
+    try:
+        if request.args.get("score_max") not in (None, ""):
+            score_max = float(request.args.get("score_max"))
+    except (TypeError, ValueError):
+        score_max = None
+
+    jobs, total = get_unmatched_jobs(
+        page=page,
+        page_size=page_size,
+        source=source_filter,
+        search=search_query or None,
+        threshold=MATCH_THRESHOLD,
+        date_from=date_from,
+        date_to=date_to,
+        score_min=score_min,
+        score_max=score_max,
+    )
+    jobs = [_serialize(j) for j in jobs]
+    pages = max(1, (total + page_size - 1) // page_size) if total else 1
+    page = min(max(1, page), pages)
+
+    return jsonify({
+        "jobs": jobs,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": pages,
+        "threshold": MATCH_THRESHOLD,
+    })
 
 
 @app.route("/api/jobs/<job_id>/status", methods=["PATCH"])
@@ -157,16 +228,19 @@ def api_stats():
     ai_matched = sum(by_status.values())
 
     scraper = get_scraper_stats()
+    unmatched = count_unmatched_jobs(threshold=MATCH_THRESHOLD)
 
     return jsonify({
         # existing: matched-jobs filter chips
         "total":     ai_matched,
         "by_status": by_status,
+        "unmatched": unmatched,
         # new: full-pipeline funnel
         "funnel": {
             "title_clicked": scraper.get("title_passed_clicked", 0),
             "german_filtered": scraper.get("german_filtered", 0),
             "ai_matched": ai_matched,
+            "ai_unmatched": unmatched,
             "applied": by_status.get("applied", 0),
         },
     })

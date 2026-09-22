@@ -40,7 +40,23 @@
       height: 56px;
       display: flex; align-items: center; justify-content: space-between;
     }
-    .logo { font-size: 1.1rem; font-weight: 700; letter-spacing: .03em; color: var(--accent); }
+    .logo { font-size: 1.1rem; font-weight: 700; letter-spacing: .03em; color: var(--accent); text-decoration: none; }
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+    .nav-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 6px 14px;
+      font-size: .82rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .nav-btn b { color: var(--muted); font-weight: 600; }
 
     /* ── Stats bar ────────────────────────────────────────────────── */
     .stats-bar {
@@ -351,8 +367,11 @@
 
 <!-- ── Header ──────────────────────────────────────────────────────── -->
 <header>
-  <span class="logo">💼 Job Tracker</span>
-  <button id="refreshBtn" class="btn-save" onclick="loadJobs()" style="padding:6px 14px;font-size:.82rem;">↻ 刷新</button>
+  <a class="logo" href="/">💼 Job Tracker</a>
+  <div class="header-actions">
+    <a class="nav-btn" href="/unmatched">未匹配岗位 <b id="unmatchedNavCount"></b></a>
+    <button id="refreshBtn" class="btn-save" onclick="loadJobs()" style="padding:6px 14px;font-size:.82rem;">↻ 刷新</button>
+  </div>
 </header>
 
 <!-- ── Pipeline funnel ─────────────────────────────────────────────── -->
@@ -454,6 +473,10 @@ async function loadStats() {
 
     // Filter chips (existing)
     document.getElementById('cnt-all').textContent = data.total;
+    const unmatchedEl = document.getElementById('unmatchedNavCount');
+    if (unmatchedEl) {
+      unmatchedEl.textContent = typeof data.unmatched === 'number' ? `(${data.unmatched})` : '';
+    }
     for (const [status, cnt] of Object.entries(data.by_status)) {
       const el = document.getElementById(`cnt-${status}`);
       if (el) el.textContent = cnt;

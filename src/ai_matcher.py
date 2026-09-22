@@ -339,6 +339,21 @@ def _normalize_breakdown(section) -> Dict:
     }
 
 
+def _analysis_fields(analysis: Dict) -> Dict:
+    """Normalize AI analysis into the fields stored on job documents."""
+    return {
+        "recommendation": analysis.get("recommendation", ""),
+        "disqualification_reason": analysis.get("disqualification_reason", ""),
+        "match_reasons": analysis.get("match_reasons", []),
+        "missing_requirements": analysis.get("missing_requirements", []),
+        "red_flags": analysis.get("red_flags", []),
+        "nice_to_have_matches": analysis.get("nice_to_have_matches", []),
+        "summary": analysis.get("summary", ""),
+        "what_youll_do": _normalize_breakdown(analysis.get("what_youll_do")),
+        "what_theyre_looking_for": _normalize_breakdown(analysis.get("what_theyre_looking_for")),
+    }
+
+
 def save_matched_job(job: Dict, analysis: Dict) -> bool:
     """
     Save a matched job to the matched_jobs collection.
@@ -371,15 +386,7 @@ def save_matched_job(job: Dict, analysis: Dict) -> bool:
             
             # AI matching analysis
             "match_score": analysis.get("match_score", 0),
-            "recommendation": analysis.get("recommendation", ""),
-            "disqualification_reason": analysis.get("disqualification_reason", ""),  # New field
-            "match_reasons": analysis.get("match_reasons", []),
-            "missing_requirements": analysis.get("missing_requirements", []),
-            "red_flags": analysis.get("red_flags", []),
-            "nice_to_have_matches": analysis.get("nice_to_have_matches", []),  # New field
-            "summary": analysis.get("summary", ""),
-            "what_youll_do": _normalize_breakdown(analysis.get("what_youll_do")),
-            "what_theyre_looking_for": _normalize_breakdown(analysis.get("what_theyre_looking_for")),
+            **_analysis_fields(analysis),
             
             # Metadata
             "status": "pending",  # pending, applied, rejected, interview
@@ -440,14 +447,24 @@ def process_new_jobs(limit: Optional[int] = None, source: Optional[str] = None):
         
         if not analysis:
             print("⚠ AI analysis failed, skip")
-            # 即使失败也标记，避免重复处理
-            mark_job_as_matched(job.get("job_id"), job.get("source"), match_score=0)
+            # Still mark so the same job is not retried forever
+            mark_job_as_matched(
+                job.get("job_id"),
+                job.get("source"),
+                match_score=0,
+                analysis={
+                    "recommendation": "No",
+                    "disqualification_reason": "AI analysis failed",
+                    "summary": "AI analysis failed; skipped to avoid reprocessing.",
+                },
+            )
             continue
         
         processed_count += 1
         match_score = analysis.get("match_score", 0)
         recommendation = analysis.get("recommendation", "")
         disqualification_reason = analysis.get("disqualification_reason", "")
+        analysis_fields = _analysis_fields(analysis)
         
         print(f"Match score: {match_score}/10")
         print(f"Recommendation: {recommendation}")
@@ -461,8 +478,8 @@ def process_new_jobs(limit: Optional[int] = None, source: Optional[str] = None):
         if nice_to_have and len(nice_to_have) > 0:
             print(f"✨ Nice-to-have matches: {', '.join(nice_to_have[:3])}")
 
-        looking = _normalize_breakdown(analysis.get("what_theyre_looking_for"))
-        doing = _normalize_breakdown(analysis.get("what_youll_do"))
+        looking = analysis_fields["what_theyre_looking_for"]
+        doing = analysis_fields["what_youll_do"]
         print(
             f"What you'll do: {len(doing['matched'])} matched / {len(doing['unmatched'])} unmatched"
         )
@@ -473,16 +490,21 @@ def process_new_jobs(limit: Optional[int] = None, source: Optional[str] = None):
             preview = "; ".join(looking["unmatched"][:3])
             print(f"  gaps: {preview}")
         
-        # Save if meets threshold
+        # High-score jobs also go to matched_jobs for the tracker
         if match_score >= MATCH_THRESHOLD:
             if save_matched_job(job, analysis):
                 matched_count += 1
         else:
-            print(f"✗ Score below threshold ({MATCH_THRESHOLD}), not saved")
+            print(f"✗ Score below threshold ({MATCH_THRESHOLD}), kept on jobs with AI reason")
         
-        # 标记此job已经过AI匹配（重要：避免重复处理）
-        mark_job_as_matched(job.get("job_id"), job.get("source"), match_score=match_score)
-        print(f"✓ Marked as matched in jobs collection")
+        # Always write the full AI result onto the original jobs document
+        mark_job_as_matched(
+            job.get("job_id"),
+            job.get("source"),
+            match_score=match_score,
+            analysis=analysis_fields,
+        )
+        print(f"✓ Saved AI analysis on jobs collection")
     
     print(f"\n=== Matching Complete ===")
     print(f"Processed: {processed_count}/{total_jobs}")

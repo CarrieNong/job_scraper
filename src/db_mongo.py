@@ -47,9 +47,11 @@ def init_db():
     collection.create_index("job_id")
     collection.create_index("source")
     collection.create_index("created_at")
+    collection.create_index("matched_at")
+    collection.create_index("match_score")
     
     print(f"MongoDB initialized: {DATABASE_NAME}.{COLLECTION_NAME}")
-    print(f"Indexes created: link (unique), job_id, source, created_at")
+    print(f"Indexes created: link (unique), job_id, source, created_at, matched_at, match_score")
 
 
 def save_job(job_data):
@@ -257,35 +259,147 @@ def get_scraper_stats() -> dict:
     return doc
 
 
-def mark_job_as_matched(job_id, source, match_score=None):
+def mark_job_as_matched(job_id, source, match_score=None, analysis=None):
     """
-    标记职位为已匹配（已进行AI分析）
-    
+    Mark a job as AI-analyzed and persist the full analysis on the jobs document.
+
+    Matched jobs are also copied to matched_jobs separately. Unmatched jobs stay
+    here so the unmatched page can show score, reason, and breakdowns.
+
     Args:
         job_id (str): Job ID
         source (str): Job source website
-        match_score (float): 匹配分数（0-10）
-        
+        match_score (float): Match score (0-10)
+        analysis (dict): Full AI analysis payload to store on the job
+
     Returns:
         bool: True if updated successfully
     """
     db = get_db()
     collection = db[COLLECTION_NAME]
-    
+
     update_data = {
         "matched_at": datetime.now(),
-        "updated_at": datetime.now()
+        "updated_at": datetime.now(),
     }
-    
+
     if match_score is not None:
         update_data["match_score"] = match_score
-    
+
+    if analysis:
+        update_data.update({
+            "recommendation": analysis.get("recommendation", ""),
+            "disqualification_reason": analysis.get("disqualification_reason", ""),
+            "match_reasons": analysis.get("match_reasons", []),
+            "missing_requirements": analysis.get("missing_requirements", []),
+            "red_flags": analysis.get("red_flags", []),
+            "nice_to_have_matches": analysis.get("nice_to_have_matches", []),
+            "summary": analysis.get("summary", ""),
+            "what_youll_do": analysis.get("what_youll_do") or {"matched": [], "unmatched": []},
+            "what_theyre_looking_for": analysis.get("what_theyre_looking_for") or {"matched": [], "unmatched": []},
+        })
+
     result = collection.update_one(
         {"job_id": job_id, "source": source},
         {"$set": update_data}
     )
-    
+
     return result.modified_count > 0
+
+
+def _parse_filter_date(value, end_of_day=False):
+    """Parse YYYY-MM-DD or YYYY-MM-DDTHH:MM into a datetime, or None."""
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M"):
+        try:
+            parsed = datetime.strptime(text, fmt)
+            if end_of_day and fmt == "%Y-%m-%d":
+                parsed = parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+            return parsed
+        except ValueError:
+            continue
+    return None
+
+
+def get_unmatched_jobs(
+    page=1,
+    page_size=20,
+    source=None,
+    search=None,
+    threshold=7.0,
+    date_from=None,
+    date_to=None,
+    score_min=None,
+    score_max=None,
+):
+    """
+    Return AI-analyzed jobs that scored below the match threshold.
+
+    Newest matched_at first. Optional time range and score range filters
+    are applied on top of the unmatched threshold.
+    """
+    db = get_db()
+    collection = db[COLLECTION_NAME]
+
+    page = max(1, int(page or 1))
+    page_size = max(1, min(int(page_size or 20), 50))
+
+    score_filter = {"$lt": float(threshold)}
+    if score_min is not None:
+        score_filter["$gte"] = float(score_min)
+    if score_max is not None:
+        score_filter["$lte"] = min(float(score_max), float(threshold) - 0.0001)
+
+    filter_dict = {
+        "matched_at": {"$exists": True},
+        "match_score": score_filter,
+    }
+
+    start = _parse_filter_date(date_from)
+    end = _parse_filter_date(date_to, end_of_day=True)
+    if start or end:
+        time_filter = {}
+        if start:
+            time_filter["$gte"] = start
+        if end:
+            time_filter["$lte"] = end
+        filter_dict["matched_at"] = time_filter
+
+    if source:
+        filter_dict["source"] = source
+    if search:
+        filter_dict["$or"] = [
+            {"title": {"$regex": search, "$options": "i"}},
+            {"company": {"$regex": search, "$options": "i"}},
+            {"disqualification_reason": {"$regex": search, "$options": "i"}},
+            {"summary": {"$regex": search, "$options": "i"}},
+        ]
+
+    total = collection.count_documents(filter_dict)
+    pages = max(1, (total + page_size - 1) // page_size) if total else 1
+    page = min(page, pages)
+    skip = (page - 1) * page_size
+    projection = {"description": 0}
+    jobs = list(
+        collection.find(filter_dict, projection)
+        .sort("matched_at", -1)
+        .skip(skip)
+        .limit(page_size)
+    )
+    return jobs, total
+
+
+def count_unmatched_jobs(threshold=7.0):
+    """Count AI-analyzed jobs that scored below the match threshold."""
+    db = get_db()
+    return db[COLLECTION_NAME].count_documents({
+        "matched_at": {"$exists": True},
+        "match_score": {"$lt": float(threshold)},
+    })
 
 
 def delete_old_jobs(days=30):
