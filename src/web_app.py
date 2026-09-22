@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
-from db_mongo import get_collection
+from db_mongo import get_collection, get_scraper_stats
 
 load_dotenv()
 
@@ -149,13 +149,27 @@ def api_update_notes(job_id: str):
 
 @app.route("/api/stats")
 def api_stats():
-    """Return status counts for the summary bar."""
+    """Return status counts for the summary bar and pipeline funnel."""
     collection = get_collection("matched_jobs")
     pipeline = [{"$group": {"_id": "$status", "count": {"$sum": 1}}}]
     raw = list(collection.aggregate(pipeline))
-    stats = {item["_id"]: item["count"] for item in raw}
-    total = sum(stats.values())
-    return jsonify({"total": total, "by_status": stats})
+    by_status = {item["_id"]: item["count"] for item in raw}
+    ai_matched = sum(by_status.values())
+
+    scraper = get_scraper_stats()
+
+    return jsonify({
+        # existing: matched-jobs filter chips
+        "total":     ai_matched,
+        "by_status": by_status,
+        # new: full-pipeline funnel
+        "funnel": {
+            "title_clicked": scraper.get("title_passed_clicked", 0),
+            "german_filtered": scraper.get("german_filtered", 0),
+            "ai_matched": ai_matched,
+            "applied": by_status.get("applied", 0),
+        },
+    })
 
 
 # ─── Entry point ─────────────────────────────────────────────────────────────

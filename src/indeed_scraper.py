@@ -15,7 +15,7 @@ if __name__ == "__main__":
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
     
-from db_mongo import init_db, save_job, is_job_id_exists
+from db_mongo import init_db, save_job, is_job_id_exists, increment_scraper_stat
 from config import (
     MAX_JOBS_PER_PAGE,
     INDEED_CONFIG,
@@ -158,6 +158,8 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
                 print(f"Job {index + 1}: job_id {job_id} already in DB, skip click")
                 continue
 
+            # Title passed + new job → count as a candidate we evaluated
+            increment_scraper_stat("title_passed_clicked")
             card.click()
             page.wait_for_selector(DETAIL_SELECTOR, timeout=15000)
             pause(1.0, 2.0)
@@ -171,6 +173,7 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
             )
 
             if lang == "de":
+                increment_scraper_stat("german_filtered")
                 print(f"Job {index + 1}: German description detected, skip save")
             else:
                 # Indeed JD is rich HTML without stable field classes; store full HTML.

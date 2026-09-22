@@ -141,7 +141,7 @@ sudo pmset -c sleep 1 displaysleep 10
 ## Running the Pipeline Manually
 
 ```bash
-./run_task.sh
+ caffeinate -i ./run_task.sh
 ```
 
 Execution order:

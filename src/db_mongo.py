@@ -223,6 +223,40 @@ def update_job_status(job_id, source, new_status):
     return result.modified_count > 0
 
 
+def increment_scraper_stat(key: str, amount: int = 1) -> None:
+    """
+    Atomically increment a global scraper counter by `amount`.
+
+    Counters are stored in the `scraper_stats` collection as a single
+    document with _id="global".  The document is created on first use.
+
+    Recognised keys
+    ---------------
+    title_passed_clicked  – jobs that passed the title filter and were new
+                            (i.e. we actually clicked into the detail page)
+    german_filtered       – detail pages detected as German and skipped
+    """
+    db = get_db()
+    db["scraper_stats"].update_one(
+        {"_id": "global"},
+        {"$inc": {key: amount}, "$set": {"updated_at": datetime.now()}},
+        upsert=True,
+    )
+
+
+def get_scraper_stats() -> dict:
+    """
+    Return all scraper counters as a plain dict (keys without leading '_').
+
+    Returns an empty dict if no scraping run has taken place yet.
+    """
+    db = get_db()
+    doc = db["scraper_stats"].find_one({"_id": "global"}) or {}
+    doc.pop("_id", None)
+    doc.pop("updated_at", None)
+    return doc
+
+
 def mark_job_as_matched(job_id, source, match_score=None):
     """
     标记职位为已匹配（已进行AI分析）

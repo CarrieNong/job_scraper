@@ -69,6 +69,33 @@
     .dot-interview  { background: var(--interview); }
     .dot-unsuitable { background: var(--unsuitable); }
 
+    /* ── Pipeline funnel ──────────────────────────────────────────── */
+    .funnel-bar {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 0;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .funnel-step {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 4px; padding: 8px 20px;
+      border-radius: 10px;
+      min-width: 110px;
+    }
+    .funnel-num {
+      font-size: 1.55rem; font-weight: 700; line-height: 1;
+      color: var(--text);
+    }
+    .funnel-label { font-size: .73rem; color: var(--muted); white-space: nowrap; }
+    .funnel-step.f-clicked  .funnel-num { color: var(--accent); }
+    .funnel-step.f-german   .funnel-num { color: #ef4444; }
+    .funnel-step.f-matched  .funnel-num { color: #f59e0b; }
+    .funnel-step.f-applied  .funnel-num { color: var(--applied); }
+    .funnel-sep {
+      font-size: 1.1rem; color: var(--border);
+      padding: 0 2px; flex-shrink: 0;
+    }
+
     /* ── Toolbar ──────────────────────────────────────────────────── */
     .toolbar {
       display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
@@ -279,6 +306,29 @@
   <button id="refreshBtn" class="btn-save" onclick="loadJobs()" style="padding:6px 14px;font-size:.82rem;">↻ 刷新</button>
 </header>
 
+<!-- ── Pipeline funnel ─────────────────────────────────────────────── -->
+<div class="funnel-bar" id="funnelBar">
+  <div class="funnel-step f-clicked">
+    <div class="funnel-num" id="f-clicked">–</div>
+    <div class="funnel-label">标题通过 · 已点击</div>
+  </div>
+  <div class="funnel-sep">▸</div>
+  <div class="funnel-step f-german">
+    <div class="funnel-num" id="f-german">–</div>
+    <div class="funnel-label">德语过滤</div>
+  </div>
+  <div class="funnel-sep">▸</div>
+  <div class="funnel-step f-matched">
+    <div class="funnel-num" id="f-matched">–</div>
+    <div class="funnel-label">AI 匹配通过</div>
+  </div>
+  <div class="funnel-sep">▸</div>
+  <div class="funnel-step f-applied">
+    <div class="funnel-num" id="f-applied">–</div>
+    <div class="funnel-label">已投递</div>
+  </div>
+</div>
+
 <!-- ── Stats bar ───────────────────────────────────────────────────── -->
 <div class="stats-bar" id="statsBar">
   <div class="stat-chip active" data-status="all"   onclick="setStatusFilter('all')">
@@ -347,23 +397,32 @@ function showToast(msg, type = 'ok') {
   setTimeout(() => { t.className = 'toast'; }, 2500);
 }
 
-/* ── Stats bar ───────────────────────────────────────────────────── */
+/* ── Stats bar + funnel ──────────────────────────────────────────── */
 async function loadStats() {
   try {
     const res = await fetch('/api/stats');
     const data = await res.json();
+
+    // Filter chips (existing)
     document.getElementById('cnt-all').textContent = data.total;
     for (const [status, cnt] of Object.entries(data.by_status)) {
       const el = document.getElementById(`cnt-${status}`);
       if (el) el.textContent = cnt;
     }
-    // Zero-out others
     ['pending','applied','rejected','interview','unsuitable'].forEach(s => {
       if (!data.by_status[s]) {
         const el = document.getElementById(`cnt-${s}`);
         if (el) el.textContent = 0;
       }
     });
+
+    // Funnel (new)
+    if (data.funnel) {
+      document.getElementById('f-clicked').textContent = data.funnel.title_clicked;
+      document.getElementById('f-german').textContent  = data.funnel.german_filtered;
+      document.getElementById('f-matched').textContent = data.funnel.ai_matched;
+      document.getElementById('f-applied').textContent = data.funnel.applied;
+    }
   } catch (_) {}
 }
 
