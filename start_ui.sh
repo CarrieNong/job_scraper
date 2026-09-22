@@ -2,7 +2,8 @@
 # start_ui.sh - Start the Job Tracker Web UI
 PROJECT_DIR="/Users/carrienon/Desktop/code-project/job_scraper"
 PYTHON="/opt/miniconda3/bin/python3"
-PORT="${1:-5000}"
+# Avoid 5000: macOS AirPlay Receiver binds *:5000 and returns HTTP 403.
+PORT="${1:-5050}"
 
 cd "$PROJECT_DIR" || exit 1
 

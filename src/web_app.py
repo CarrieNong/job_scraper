@@ -252,7 +252,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Job Tracker Web UI")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind")
-    parser.add_argument("--port", "-p", type=int, default=5000, help="Port to listen on")
+    parser.add_argument("--port", "-p", type=int, default=5050, help="Port to listen on")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
 
