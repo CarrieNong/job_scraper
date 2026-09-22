@@ -3,11 +3,14 @@ Shared utility functions for web scrapers.
 Provides common functionality for browser automation, delays, and data extraction.
 """
 import argparse
+import html as html_module
 import random
 import re
 import socket
 import subprocess
 import time
+
+from lingua import Language, LanguageDetectorBuilder
 
 from config import (
     DEFAULT_KEYWORDS,
@@ -22,6 +25,13 @@ from config import (
 
 # Pre-compile all exclusion patterns once for efficiency (case-insensitive)
 _EXCLUDE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in TITLE_EXCLUDE_KEYWORDS]
+
+# Too little text to classify reliably (failed/empty detail panels).
+_MIN_LANG_CHARS = 40
+
+# Restrict the model set to languages commonly seen on DE job boards.
+# Lingua is more accurate with a small candidate set than with all 75 languages.
+_LANGUAGE_DETECTOR = None
 
 
 def is_title_excluded(title: str) -> bool:
@@ -42,6 +52,56 @@ def is_title_excluded(title: str) -> bool:
         if pattern.search(title):
             return True
     return False
+
+
+def _get_language_detector():
+    """Build a Lingua detector once; language models load lazily on first use."""
+    global _LANGUAGE_DETECTOR
+    if _LANGUAGE_DETECTOR is None:
+        _LANGUAGE_DETECTOR = LanguageDetectorBuilder.from_languages(
+            Language.ENGLISH,
+            Language.GERMAN,
+            Language.FRENCH,
+            Language.DUTCH,
+        ).build()
+    return _LANGUAGE_DETECTOR
+
+
+def _to_plain_text(text: str) -> str:
+    """Strip HTML tags/entities so language detection sees actual copy, not markup."""
+    if not text:
+        return ""
+    cleaned = re.sub(
+        r"<(style|script)[^>]*>.*?</\1>",
+        " ",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    cleaned = re.sub(r"<[^>]+>", " ", cleaned)
+    cleaned = html_module.unescape(cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def detect_job_detail_language(text: str):
+    """
+    Detect the primary language of job-detail content.
+
+    Uses Lingua (Apache-2.0): statistical n-gram language models, not umlauts
+    or a German word list. HTML is stripped first.
+
+    Args:
+        text: Job description / detail HTML or plain text
+
+    Returns:
+        Lowercase ISO 639-1 code such as 'de' or 'en', or None if unknown.
+    """
+    plain = _to_plain_text(text)
+    if len(plain) < _MIN_LANG_CHARS:
+        return None
+    language = _get_language_detector().detect_language_of(plain)
+    if language is None:
+        return None
+    return language.iso_code_639_1.name.lower()
 
 
 def pause(min_seconds, max_seconds, message=None):

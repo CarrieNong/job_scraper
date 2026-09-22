@@ -27,6 +27,7 @@ from scraper_utils import (
     parse_args,
     connect_browser,
     is_title_excluded,
+    detect_job_detail_language,
 )
 
 # LinkedIn configuration
@@ -191,23 +192,30 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
 
             desc_locator = page.locator(".jobs-box__html-content")
             job_desc_text = safe_text(desc_locator, timeout=5000)
-            print(f"Job {index + 1}: description length {len(job_desc_text)}")
+            lang = detect_job_detail_language(job_desc_text)
+            print(
+                f"Job {index + 1}: description length {len(job_desc_text)}, "
+                f"language={lang or 'unknown'}"
+            )
 
-            job_data = {
-                "title": title,
-                "company": company,
-                "location": location,
-                "status": status,
-                "link": href_value,
-                "job_id": job_id,
-                "applicants": apply_number,
-                "description": job_desc_text,
-                "source": SOURCE,
-            }
+            if lang == "de":
+                print(f"Job {index + 1}: German description detected, skip save")
+            else:
+                job_data = {
+                    "title": title,
+                    "company": company,
+                    "location": location,
+                    "status": status,
+                    "link": href_value,
+                    "job_id": job_id,
+                    "applicants": apply_number,
+                    "description": job_desc_text,
+                    "source": SOURCE,
+                }
 
-            if save_job(job_data):
-                jobs_data.append(job_data)
-                print(f"Job {index + 1}: saved job_id {job_id}")
+                if save_job(job_data):
+                    jobs_data.append(job_data)
+                    print(f"Job {index + 1}: saved job_id {job_id}")
 
             if random.random() < 0.3:
                 pause(1, 3, f"Job {index + 1}: extra think time")

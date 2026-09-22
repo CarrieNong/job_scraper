@@ -1,6 +1,9 @@
 # Web scraping
 playwright>=1.40.0
 
+# Language detection (Apache-2.0 statistical n-gram models)
+lingua-language-detector>=2.1.0
+
 # Database - MongoDB
 pymongo>=4.6.0
 python-dotenv>=1.0.0

@@ -27,6 +27,7 @@ from scraper_utils import (
     parse_args,
     connect_browser,
     is_title_excluded,
+    detect_job_detail_language,
 )
 
 # Indeed configuration
@@ -163,25 +164,32 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
 
             detail = page.locator(DETAIL_SELECTOR).first
             description_html = detail.inner_html(timeout=10000) or ""
-            print(f"Job {index + 1}: description html length {len(description_html)}")
+            lang = detect_job_detail_language(description_html)
+            print(
+                f"Job {index + 1}: description html length {len(description_html)}, "
+                f"language={lang or 'unknown'}"
+            )
 
-            # Indeed JD is rich HTML without stable field classes; store full HTML.
-            # company / location / applicants are left empty for now.
-            job_data = {
-                "title": title,
-                "company": "",
-                "location": "",
-                "status": "new",
-                "link": href_value,
-                "job_id": job_id,
-                "applicants": "",
-                "description": description_html,
-                "source": SOURCE,
-            }
+            if lang == "de":
+                print(f"Job {index + 1}: German description detected, skip save")
+            else:
+                # Indeed JD is rich HTML without stable field classes; store full HTML.
+                # company / location / applicants are left empty for now.
+                job_data = {
+                    "title": title,
+                    "company": "",
+                    "location": "",
+                    "status": "new",
+                    "link": href_value,
+                    "job_id": job_id,
+                    "applicants": "",
+                    "description": description_html,
+                    "source": SOURCE,
+                }
 
-            if save_job(job_data):
-                jobs_data.append(job_data)
-                print(f"Job {index + 1}: saved job_id {job_id}")
+                if save_job(job_data):
+                    jobs_data.append(job_data)
+                    print(f"Job {index + 1}: saved job_id {job_id}")
 
             if random.random() < 0.3:
                 pause(1, 3, f"Job {index + 1}: extra think time")
