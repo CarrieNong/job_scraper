@@ -1,6 +1,8 @@
 #!/bin/bash
 # run_task.sh - Daily job scraping and AI matching pipeline
-# Execution order: Indeed -> LinkedIn -> AI Matching
+# Execution order: Indeed ─┐
+#                           ├─(parallel)─> AI Matching
+#                LinkedIn ──┘
 
 # Configuration
 PROJECT_DIR="/Users/carrienon/Desktop/code-project/job_scraper"
@@ -35,28 +37,33 @@ sleep 5
 
 cd "$PROJECT_DIR" || exit 1
 
-# Step 2: Indeed scraper
-log "Step 1/3: Running Indeed scraper..."
-$PYTHON src/indeed_scraper.py --max-pages 3 > "$LOG_DIR/indeed_$(date +%Y%m%d).log" 2>&1
-INDEED_EXIT=$?
+# Step 2 & 3: Indeed + LinkedIn scrapers (run in parallel)
+log "Step 1/3: Running Indeed and LinkedIn scrapers in parallel..."
+$PYTHON src/indeed_scraper.py --max-pages 3 > "$LOG_DIR/indeed_$(date +%Y%m%d).log" 2>&1 &
+INDEED_PID=$!
+$PYTHON src/linkedin_scraper.py --max-pages 3 > "$LOG_DIR/linkedin_$(date +%Y%m%d).log" 2>&1 &
+LINKEDIN_PID=$!
+
+log "  Indeed  (PID: $INDEED_PID)  and  LinkedIn (PID: $LINKEDIN_PID)  running..."
+
+# Wait for both scrapers to finish
+wait $INDEED_PID;  INDEED_EXIT=$?
+wait $LINKEDIN_PID; LINKEDIN_EXIT=$?
+
 if [ $INDEED_EXIT -eq 0 ]; then
     log "✅ Indeed scraper completed successfully"
 else
     log "⚠️  WARNING: Indeed scraper failed (exit code: $INDEED_EXIT)"
 fi
 
-# Step 3: LinkedIn scraper
-log "Step 2/3: Running LinkedIn scraper..."
-$PYTHON src/linkedin_scraper.py --max-pages 3 > "$LOG_DIR/linkedin_$(date +%Y%m%d).log" 2>&1
-LINKEDIN_EXIT=$?
 if [ $LINKEDIN_EXIT -eq 0 ]; then
     log "✅ LinkedIn scraper completed successfully"
 else
     log "⚠️  WARNING: LinkedIn scraper failed (exit code: $LINKEDIN_EXIT)"
 fi
 
-# Step 4: AI matching
-log "Step 3/3: Running AI job matching..."
+# Step 4: AI matching (runs only after both scrapers are done)
+log "Step 3/3: Running AI job matching (both scrapers done)..."
 $PYTHON src/ai_matcher.py --threshold 7.0 > "$LOG_DIR/matcher_$(date +%Y%m%d).log" 2>&1
 MATCHER_EXIT=$?
 if [ $MATCHER_EXIT -eq 0 ]; then
