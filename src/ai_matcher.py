@@ -99,12 +99,12 @@ def build_matching_prompt(job: Dict, user_profile: str, criteria: str) -> str:
 ## Candidate Profile
 {user_profile}
 
-## Matching Criteria (FOLLOW STRICTLY)
+## Matching Criteria (FOLLOW STRICTLY — single source of truth for scoring)
 {criteria}
 
-## CRITICAL EVALUATION PROCESS - FOLLOW THIS ORDER:
+## Task Process
 
-### STEP 0: Parse the JD (Job Wizard style) — ALWAYS DO THIS FIRST
+### 1. Parse the JD (always do this first)
 Read the full job description and split it into two lists of atomic items (one responsibility or requirement per bullet). Paraphrase clearly; do not invent items that are not in the JD.
 
 1. **What you'll do** — day-to-day responsibilities, duties, tasks, ownership
@@ -114,85 +114,14 @@ Then compare EACH item against the candidate profile:
 - **matched**: the candidate can reasonably do / already has this, based on the resume
 - **unmatched**: the candidate cannot do this, or it is a gap
 
-These two breakdowns MUST appear in the JSON. They are independent of scoring: still fill them even if the job is disqualified.
+These two breakdowns MUST appear in the JSON even if the job is disqualified.
 
----
+### 2. Score using Matching Criteria
+Apply the Matching Criteria above in order (hard requirements → required skills → nice-to-have bonus → domain bonus). Do not invent extra disqualification rules beyond that document.
 
-### STEP 1: Hard Requirements Check (IMMEDIATE DISQUALIFICATION)
-**Check these FIRST. If ANY fails, assign score ≤ 3 immediately.** Still complete Step 0 breakdowns.
+## JSON Response Format
 
-1. **German language** (explicit written requirement only — NEVER infer from location):
-   - German-language JDs are already filtered out. Do not re-filter because the text looks German.
-   - ❌ DISQUALIFY only if the JD **explicitly states** German as a mandatory job-language requirement (must-have / required / fluent / native / C1). English JDs can still say this in writing; only then fail.
-   - ✅ PASS if German is nice-to-have / plus / advantage, not mentioned as a language skill, or you would only be guessing from location.
-   - **NEVER infer German from**: "Berlin, Germany (On-site/Hybrid)", DACH, "Berlin office", "in-person culture in Berlin", a German/European company, German customers/brands, or office perks. Location ≠ language requirement.
-   - Do **not** invent "Fluency in German" (or similar) in what_theyre_looking_for / unmatched if the JD never asked for German.
-
-2. **Years of experience**:
-   - Candidate: **7 years** frontend / software engineering; **1 year** full-stack / backend (Node.js).
-   - ❌ DISQUALIFY if a **must-have** year requirement exceeds the candidate in that dimension (overall/frontend/software > 7, or backend-specific > 1). A range that includes the candidate's years (e.g. "1-2 years" backend) PASSES.
-   - ✅ PASS if years are within range, unstated, or only a nice-to-have. "Senior" in the title alone is not a disqualification.
-
-3. **Backend language** (ONLY if a backend language is a hard/mandatory requirement):
-   - Candidate: Node.js ecosystem (Express, Nest, Fastify, Koa, etc.) + TypeScript/JavaScript backend; light Python only (NOT enough when Python is the sole primary backend).
-   - ❌ DISQUALIFY only if the **sole / clearly primary** mandatory backend is a language the candidate does not know (Python-only, Java, Go, PHP, Ruby, C#, .NET, etc.) **and** Node.js / TypeScript / JavaScript backend is **not** listed as an accepted option.
-   - ⚠️ **Mixed stack (IMPORTANT)**: If the JD lists **both** a known language (Node.js / TypeScript / JS) **and** an unknown one (Python, Java, Go, etc.) — e.g. "Python, TypeScript", "Node or Python" — do **NOT** disqualify. Score as an **approximate match (≥ 7.0)** if other skills largely fit (so it is saved for human review), put the unknown language clearly in `red_flags`, `missing_requirements`, `what_theyre_looking_for.unmatched`, and `summary`, and set `recommendation` to **"Maybe"** so the candidate can decide whether to apply.
-   - ✅ PASS if required backend is Node.js / TypeScript / JS only, or no backend language is mandatory, or backend is nice-to-have.
-
-4. **DevOps/SRE**:
-   - ❌ DISQUALIFY if this is primarily a DevOps/SRE role OR DevOps is a core responsibility.
-   - ✅ PASS if DevOps is nice-to-have or only basic CI/CD / Docker / Git.
-
-**If ANY hard requirement fails, score ≤ 3 and give a specific disqualification_reason.**
-
----
-
-### STEP 2: Required Skills Match (Base Score: 4-8)
-Evaluate ONLY skills marked as "required" or "mandatory" in JD:
-- Frontend frameworks: React/Vue/Angular (candidate has 7 years); candidate also has strong vanilla JS / ES6+ throughout
-- Experience level match
-- Required technical stack alignment
-- Role focus (frontend vs backend split)
-
-**IMPORTANT — JavaScript / vanilla JS roles**:
-- If the JD is primarily a frontend JavaScript role (vanilla JS, DOM, browser APIs) rather than requiring a specific proprietary framework, count the candidate's 7 years of JS development as a FULL match for the JS requirement.
-- If the JD uses a niche/legacy framework (CanJS, Backbone, Ember, Knockout, etc.) but also lists React, Angular, or Vue as reference keywords or the core requirement is "strong JavaScript", do NOT heavily penalize. The framework gap is at most −0.5 to −1 point on the base score. The candidate's deep React/Vue/Angular + vanilla JS background demonstrates the same fundamental frontend engineering skills.
-- Build tool equivalence: Candidate's Webpack/Vite = Grunt/Gulp for scoring purposes (both are frontend build tooling). Do NOT deduct for this difference.
-- Test framework equivalence: Candidate's Jest/Cypress ≈ Mocha/Chai. Do NOT deduct.
-
-**Scoring Guide**:
-- 8: 90%+ required skills match
-- 7: 70-89% required skills match (includes: strong JS match + minor framework difference)
-- 6: 50-69% required skills match
-- 5: 40-49% required skills match
-- 4: 30-39% required skills match
-
----
-
-### STEP 3: Nice to Have Bonus (+0 to +2)
-**CRITICAL**: "Nice to have", "Plus", "Bonus", "Preferred" skills:
-- ✅ Add +0.5 to +2 points ONLY if candidate HAS these skills
-- ➖ Add ZERO penalty if candidate does NOT have these skills
-- NEVER reduce base score for missing nice-to-have skills
-
----
-
-### STEP 4: Domain Fit Bonus (+0 to +1)
-- +1: E-commerce, SaaS, food compliance (perfect match)
-- +0.5: Related domains
-- +0: Neutral
-
----
-
-## Your Task - Provide JSON Response:
-
-**Match Score Range**:
-- 0-3: Disqualified (hard requirements not met)
-- 4-6: Weak match (many required skills missing)
-- 7-8: Good match (most required skills present)
-- 9-10: Excellent match (all required + many nice-to-have)
-
-Please respond in the following JSON format:
+Respond ONLY with valid JSON:
 {{
     "match_score": <number 0-10>,
     "recommendation": "<Yes/No/Maybe>",
@@ -220,7 +149,7 @@ Please respond in the following JSON format:
     "summary": "<Brief 1-2 sentence summary explaining the match score>"
 }}
 
-EXAMPLE for a disqualified job (score ≤ 3) — unknown backend ONLY, no Node/TS option:
+EXAMPLE — disqualified (score ≤ 3), unknown backend ONLY, no Node/TS option:
 {{
     "match_score": 2.0,
     "recommendation": "No",
@@ -240,7 +169,7 @@ EXAMPLE for a disqualified job (score ≤ 3) — unknown backend ONLY, no Node/T
     "summary": "Strong frontend skills but fails hard requirement of mandatory Python-only backend experience."
 }}
 
-EXAMPLE for a mixed-stack approximate match (score ~7) — unknown language listed WITH a known one:
+EXAMPLE — mixed-stack approximate match (score ≥ 7), unknown language listed WITH a known one:
 {{
     "match_score": 7.0,
     "recommendation": "Maybe",
@@ -264,7 +193,7 @@ EXAMPLE for a mixed-stack approximate match (score ~7) — unknown language list
     "summary": "Approximate match: strong React/TypeScript fit, but Python is also required alongside TypeScript — decide whether to apply."
 }}
 
-EXAMPLE for a good match (score 7-8):
+EXAMPLE — good match (score 7-8):
 {{
     "match_score": 8.0,
     "recommendation": "Yes",
@@ -290,14 +219,10 @@ EXAMPLE for a good match (score 7-8):
     "summary": "Excellent match with strong frontend skills and relevant e-commerce experience."
 }}
 
-**Important Notes**:
+**Notes**:
 - Always fill what_youll_do and what_theyre_looking_for with concrete JD items
 - Include "disqualification_reason" ONLY if score ≤ 3
-- List "nice_to_have_matches" to show which bonus skills candidate has
-- Be STRICT on hard requirements (explicit mandatory German only — never infer from Berlin/Germany location; years of experience; DevOps; backend ONLY when the sole mandatory backend is unknown with no Node/TS/JS option)
-- Mixed backend (known + unknown language) → approximate match (≥ 7.0 when other skills largely fit), recommendation "Maybe", explain gap clearly — do NOT score ≤ 3
-- Be FAIR on required vs nice-to-have distinction
-- Focus scoring on REQUIRED skills only, add bonus for nice-to-have
+- List "nice_to_have_matches" for bonus skills the candidate HAS
 """
     return prompt
 
@@ -329,7 +254,7 @@ def analyze_job_with_ai(job: Dict, user_profile: str, criteria: str) -> Optional
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a strict professional career advisor specializing in job matching. Always parse each JD into 'what you'll do' and 'what they're looking for', then compare every item to the resume. Follow the matching criteria exactly. Be STRICT on hard requirements: mandatory German ONLY if the JD explicitly writes German as a required job language (never infer from Berlin/Germany/on-site/office location; do not invent a German requirement; do not re-filter German-written JDs), years of experience (candidate has 7 years frontend and 1 year backend), and DevOps/SRE. Backend language: DISQUALIFY only when the sole/primary mandatory backend is a language the candidate does not know AND Node.js/TypeScript/JS backend is not an option; if the JD lists BOTH a known stack (Node/TS/JS) AND an unknown one (Python/Java/Go/etc.), do NOT disqualify — score ≥ 7.0 as approximate match when other skills largely fit, recommendation Maybe, and clearly explain the language gap in red_flags/summary for human review. Be FAIR on required vs nice-to-have skills. NEVER penalize missing nice-to-have skills. IMPORTANT for JavaScript/frontend roles: (1) If a JD primarily requires vanilla JS / strong JavaScript skills, treat the candidate's 7 years of JS development as a FULL match. (2) If a JD uses a niche/legacy framework (CanJS, Backbone, Ember, etc.) but lists React/Angular/Vue as reference keywords OR the core requirement is strong JavaScript, do NOT heavily penalize — the framework gap is at most −0.5 to −1 point; these are learnable given deep JS fundamentals. (3) Webpack/Vite = Grunt/Gulp for scoring (same build tooling responsibility). (4) Jest/Cypress ≈ Mocha/Chai for scoring. Respond only with valid JSON."
+                    "content": "You are a strict professional career advisor specializing in job matching. Always parse each JD into 'what you'll do' and 'what they're looking for', then compare every item to the resume. Follow the Matching Criteria document in the user message exactly — it is the single source of truth for hard requirements and scoring. Do not invent extra disqualification rules. Respond only with valid JSON."
                 },
                 {
                     "role": "user",

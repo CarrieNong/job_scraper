@@ -36,15 +36,15 @@ Candidate backend:
 - The JD's **only** / **clearly primary** mandatory backend is a language the candidate does not know (e.g. Python-only, Java-only, Go-only), **AND**
 - Node.js / TypeScript-backend / JavaScript-backend is **not** listed as an accepted or required option
 
-**DO NOT DISQUALIFY — treat as approximate / reviewable match (score ≥ 7.0 when other skills largely fit)** if:
+**DO NOT DISQUALIFY — treat as approximate / reviewable match** if:
 - The JD lists **both** a known stack (Node.js / TypeScript / JavaScript backend) **and** an unknown one (Python, Java, Go, etc.) as required or as the tech stack
 - Examples that must PASS as approximate match (not ≤3):
   - "Python, TypeScript, and modern web technologies"
   - "Backend in Node.js or Python"
   - "Experience with Python and/or Node.js"
   - Full-stack with React + "Python / TypeScript"
-- In these cases: continue normal scoring, deduct modestly for the unknown language (−0.5 to −1.5 from base), put the gap clearly in `red_flags`, `missing_requirements`, `what_theyre_looking_for.unmatched`, and `summary` so the candidate can decide whether to apply
-- Recommendation should be **"Maybe"** (not hard No) when the unknown language is the main caveat
+- In these cases: continue normal scoring for other skills. Put the unknown-language gap clearly in `red_flags`, `missing_requirements`, `what_theyre_looking_for.unmatched`, and `summary`. Recommendation **"Maybe"** (not hard No) when the unknown language is the main caveat.
+- **Floor rule**: if other required skills largely fit, final score must be **≥ 7.0** so the job is saved for human review. Do **not** apply a penalty that would drop the score below 7.0 — explain the gap in text fields instead of using a low score.
 
 **Also DO NOT DISQUALIFY if**:
 - No backend language is required
@@ -78,10 +78,9 @@ Nice-to-have year requirements do not disqualify.
 
 ---
 
-## Evaluation Process (Only if Hard Requirements Passed)
+## Evaluation Process (After Hard Requirements)
 
-### STEP 1: Evaluate REQUIRED/MANDATORY Skills Only
-**Only evaluate skills explicitly marked as "required", "mandatory", or "must have" in JD.**
+Base scoring uses **only** skills explicitly marked as "required", "mandatory", or "must have" in the JD. Nice-to-have skills never reduce the base score.
 
 ---
 
@@ -103,6 +102,7 @@ Nice-to-have year requirements do not disqualify.
   → Do NOT disqualify or heavily penalize. The candidate's 7 years of React/Vue/Angular + vanilla JS demonstrates framework-agnostic frontend engineering ability. These frameworks share the same JS foundations and are learnable. Score based on how well other requirements (JS depth, Node.js, CSS, architecture, etc.) match — framework gap is at most a minor deduction (-0.5 to -1 point), not a disqualifier.
 
 - **Note on build tools**: Grunt/Gulp experience is NOT required — but the candidate's Webpack/Vite/npm-scripts experience covers the same responsibility (frontend build tooling). Do NOT penalize for Grunt/Gulp mismatch; treat as equivalent skill.
+- **Note on test frameworks**: Jest / Cypress / Playwright ≈ Mocha / Chai for scoring. Do NOT deduct for this difference.
 
 ### Backend Experience Level ✅
 **Actual Experience**: 1 year of full-stack/backend with Node.js
@@ -183,9 +183,9 @@ Nice-to-have year requirements do not disqualify.
 
 ## Scoring Instructions for AI
 
-### STEP 1: Hard Requirements Check (DISQUALIFY = Score ≤ 3)
+### 1. Hard Requirements Check (DISQUALIFY = Score ≤ 3)
 1. ❌ German is an **explicitly written** mandatory job-language requirement? → DISQUALIFY. Location/office in Germany or Berlin is NOT enough.
-2. ❌ Backend language: **only** an unknown stack is mandatory (Python-only / Java-only / Go-only, etc.) with **no** Node.js / TypeScript / JS backend option? → DISQUALIFY. If unknown language **and** known language both appear → do **not** disqualify; score as approximate match (≥ 7.0 when other skills largely fit) and explain the gap.
+2. ❌ Backend language: **only** an unknown stack is mandatory (Python-only / Java-only / Go-only, etc.) with **no** Node.js / TypeScript / JS backend option? → DISQUALIFY. If unknown language **and** known language both appear → do **not** disqualify; apply the mixed-stack floor (≥ 7.0 when other skills largely fit) and explain the gap.
 3. ❌ Must-have years of experience exceed candidate years (7 frontend / 1 backend)? → DISQUALIFY
 4. ❌ DevOps/SRE required as core role? → DISQUALIFY
 
@@ -193,7 +193,7 @@ Nice-to-have year requirements do not disqualify.
 
 ---
 
-### STEP 2: Required Skills Match (Base Score: 4-8)
+### 2. Required Skills Match (Base Score: 4-8)
 Evaluate ONLY "required" or "mandatory" skills:
 
 **Scoring Rubric**:
@@ -213,7 +213,7 @@ Evaluate ONLY "required" or "mandatory" skills:
 
 ---
 
-### STEP 3: Nice to Have Bonus (+0 to +2)
+### 3. Nice to Have Bonus (+0 to +2)
 **ONLY ADD** points for nice-to-have skills candidate HAS:
 - +0.5 points: Has 1-2 nice-to-have skills
 - +1.0 points: Has 3-4 nice-to-have skills
@@ -224,7 +224,7 @@ Evaluate ONLY "required" or "mandatory" skills:
 
 ---
 
-### STEP 4: Domain/Business Fit Bonus (+0 to +1)
+### 4. Domain/Business Fit Bonus (+0 to +1)
 - +1.0: Perfect domain match (e-commerce, SaaS, food compliance)
 - +0.5: Related domain match
 - +0: Neutral/unrelated domain
@@ -234,7 +234,7 @@ Evaluate ONLY "required" or "mandatory" skills:
 ### Final Score Range:
 - **0-3**: Disqualified (hard requirements not met)
 - **4-6**: Weak match (many required skills missing)
-- **7-8**: Good match (most required skills present)
+- **7-8**: Good match (most required skills present) — also used for mixed-stack approximate matches held for human review
 - **9-10**: Excellent match (all required + many nice-to-have)
 
 ---
@@ -281,9 +281,10 @@ Evaluate ONLY "required" or "mandatory" skills:
 
 **Key Principles**:
 - Be STRICT on hard requirements (explicit mandatory German only — never infer from Berlin/Germany location; years of experience; DevOps; backend **only** when the sole mandatory backend is unknown with no Node/TS/JS option)
-- Mixed backend stacks (known + unknown language) → approximate match for human review, not auto-reject
+- Mixed backend stacks (known + unknown language) → approximate match for human review (≥ 7.0 when other skills largely fit), recommendation Maybe — not auto-reject
 - Focus on REQUIRED skills only for base scoring
 - NEVER penalize missing "nice to have" skills
 - DO reward having "nice to have" skills with modest bonus
 - Prioritize frontend-focused roles
 - Consider overall role balance (frontend vs backend split)
+- Equivalence for scoring: Webpack/Vite ≈ Grunt/Gulp; Jest/Cypress/Playwright ≈ Mocha/Chai
