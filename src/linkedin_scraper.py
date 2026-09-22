@@ -194,10 +194,10 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
 
             desc_locator = page.locator(".jobs-box__html-content")
             job_desc_text = safe_text(desc_locator, timeout=5000)
-            lang = detect_job_detail_language(job_desc_text)
+            lang, german_share = detect_job_detail_language(job_desc_text)
             print(
                 f"Job {index + 1}: description length {len(job_desc_text)}, "
-                f"language={lang or 'unknown'}"
+                f"language={lang or 'unknown'}, german_share={german_share:.0%}"
             )
 
             if lang == "de":

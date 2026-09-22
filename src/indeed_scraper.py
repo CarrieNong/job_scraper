@@ -28,6 +28,7 @@ from scraper_utils import (
     connect_browser,
     is_title_excluded,
     detect_job_detail_language,
+    strip_html,
 )
 
 # Indeed configuration
@@ -165,18 +166,17 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
             pause(1.0, 2.0)
 
             detail = page.locator(DETAIL_SELECTOR).first
-            description_html = detail.inner_html(timeout=10000) or ""
-            lang = detect_job_detail_language(description_html)
+            description = strip_html(detail.inner_html(timeout=10000) or "")
+            lang, german_share = detect_job_detail_language(description)
             print(
-                f"Job {index + 1}: description html length {len(description_html)}, "
-                f"language={lang or 'unknown'}"
+                f"Job {index + 1}: description length {len(description)}, "
+                f"language={lang or 'unknown'}, german_share={german_share:.0%}"
             )
 
             if lang == "de":
                 increment_scraper_stat("german_filtered")
                 print(f"Job {index + 1}: German description detected, skip save")
             else:
-                # Indeed JD is rich HTML without stable field classes; store full HTML.
                 # company / location / applicants are left empty for now.
                 job_data = {
                     "title": title,
@@ -186,7 +186,7 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
                     "link": href_value,
                     "job_id": job_id,
                     "applicants": "",
-                    "description": description_html,
+                    "description": description,
                     "source": SOURCE,
                 }
 

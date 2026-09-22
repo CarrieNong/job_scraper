@@ -29,6 +29,15 @@ _EXCLUDE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in TITLE_EXCLUDE_KEYWORD
 # Too little text to classify reliably (failed/empty detail panels).
 _MIN_LANG_CHARS = 40
 
+# Ignore tiny fragments ("Berlin", "3.8") when estimating language share.
+_MIN_CHUNK_CHARS = 12
+
+# Indeed DE chrome ("Weiter zur Bewerbung") is a few German lines on an
+# English JD. Only treat the posting as German above this share.
+GERMAN_SHARE_THRESHOLD = 0.20
+
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?。！？])\s+|\n+")
+
 # Restrict the model set to languages commonly seen on DE job boards.
 # Lingua is more accurate with a small candidate set than with all 75 languages.
 _LANGUAGE_DETECTOR = None
@@ -67,41 +76,88 @@ def _get_language_detector():
     return _LANGUAGE_DETECTOR
 
 
-def _to_plain_text(text: str) -> str:
-    """Strip HTML tags/entities so language detection sees actual copy, not markup."""
-    if not text:
+def strip_html(html_text: str) -> str:
+    """
+    Convert raw HTML to readable plain text.
+
+    Removes style/script blocks and tags, decodes entities, and keeps
+    paragraph/list breaks so the saved JD stays scannable.
+    """
+    if not html_text:
         return ""
-    cleaned = re.sub(
+    text = re.sub(
         r"<(style|script)[^>]*>.*?</\1>",
-        " ",
-        text,
+        "",
+        html_text,
         flags=re.DOTALL | re.IGNORECASE,
     )
-    cleaned = re.sub(r"<[^>]+>", " ", cleaned)
-    cleaned = html_module.unescape(cleaned)
-    return re.sub(r"\s+", " ", cleaned).strip()
+    text = re.sub(r"<(br|p|li|h[1-6]|div|tr)[^>]*>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = html_module.unescape(text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    lines = [line.strip() for line in text.splitlines()]
+    return "\n".join(line for line in lines if line).strip()
+
+
+def german_content_share(text: str) -> float:
+    """
+    Fraction of classified text that Lingua labels as German (0.0–1.0).
+
+    Splits on sentences/lines and weights each chunk by character length.
+    HTML is stripped first. Returns 0.0 when there is too little text.
+    """
+    plain = strip_html(text)
+    if len(plain) < _MIN_LANG_CHARS:
+        return 0.0
+
+    chunks = [
+        chunk.strip()
+        for chunk in _SENTENCE_SPLIT.split(plain)
+        if len(chunk.strip()) >= _MIN_CHUNK_CHARS
+    ]
+    if not chunks:
+        return 0.0
+
+    detector = _get_language_detector()
+    german_chars = 0
+    total_chars = 0
+    for chunk in chunks:
+        language = detector.detect_language_of(chunk)
+        total_chars += len(chunk)
+        if language == Language.GERMAN:
+            german_chars += len(chunk)
+    if total_chars == 0:
+        return 0.0
+    return german_chars / total_chars
 
 
 def detect_job_detail_language(text: str):
     """
-    Detect the primary language of job-detail content.
+    Detect job-detail language.
 
-    Uses Lingua (Apache-2.0): statistical n-gram language models, not umlauts
-    or a German word list. HTML is stripped first.
+    Uses Lingua (Apache-2.0) n-gram models. Classified as German only when
+    more than GERMAN_SHARE_THRESHOLD of the text is German, so a few DE UI
+    strings on an English Indeed page do not count.
 
     Args:
-        text: Job description / detail HTML or plain text
+        text: Job description HTML or plain text
 
     Returns:
-        Lowercase ISO 639-1 code such as 'de' or 'en', or None if unknown.
+        Tuple of (iso_code or None, german_share from 0.0 to 1.0).
+        iso_code is a lowercase ISO 639-1 code such as 'de' or 'en'.
     """
-    plain = _to_plain_text(text)
+    plain = strip_html(text)
     if len(plain) < _MIN_LANG_CHARS:
-        return None
+        return None, 0.0
+
+    german_share = german_content_share(plain)
+    if german_share > GERMAN_SHARE_THRESHOLD:
+        return "de", german_share
+
     language = _get_language_detector().detect_language_of(plain)
     if language is None:
-        return None
-    return language.iso_code_639_1.name.lower()
+        return None, german_share
+    return language.iso_code_639_1.name.lower(), german_share
 
 
 def pause(min_seconds, max_seconds, message=None):

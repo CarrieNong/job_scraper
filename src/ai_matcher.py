@@ -5,8 +5,6 @@ Uses AI to analyze job listings and match them with user profile and preferences
 """
 import sys
 import os
-import re
-import html as html_module
 from datetime import datetime
 from typing import List, Dict, Optional
 
@@ -24,6 +22,7 @@ from db_mongo import (
     is_job_id_exists,
     mark_job_as_matched,
 )
+from scraper_utils import strip_html
 
 load_dotenv()
 
@@ -31,37 +30,6 @@ load_dotenv()
 AI_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")  # or "claude-3-5-sonnet-20241022"
 AI_API_KEY = os.getenv("OPENAI_API_KEY")  # or ANTHROPIC_API_KEY
 MATCH_THRESHOLD = float(os.getenv("MATCH_THRESHOLD", "7.0"))  # Minimum match score (0-10)
-
-
-def strip_html(html_text: str) -> str:
-    """
-    Convert raw HTML to plain text.
-    - Removes all tags
-    - Decodes HTML entities (&amp; → &, &lt; → <, etc.)
-    - Collapses excessive whitespace / blank lines
-    
-    Args:
-        html_text: Raw HTML string
-        
-    Returns:
-        Clean plain-text string
-    """
-    if not html_text:
-        return ""
-    # Remove <style> and <script> blocks entirely
-    text = re.sub(r'<(style|script)[^>]*>.*?</\1>', '', html_text, flags=re.DOTALL | re.IGNORECASE)
-    # Replace block-level tags with newlines so paragraphs/list items stay readable
-    text = re.sub(r'<(br|p|li|h[1-6]|div|tr)[^>]*>', '\n', text, flags=re.IGNORECASE)
-    # Strip remaining tags
-    text = re.sub(r'<[^>]+>', '', text)
-    # Decode HTML entities
-    text = html_module.unescape(text)
-    # Collapse multiple blank lines into one
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    # Strip leading/trailing whitespace per line
-    lines = [line.strip() for line in text.splitlines()]
-    text = '\n'.join(line for line in lines if line)
-    return text.strip()
 
 
 def load_user_profile(profile_path: str = "docs/user_profile.md") -> str:
