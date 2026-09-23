@@ -16,7 +16,7 @@ DEFAULT_KEYWORDS = [
 ]
 
 # Scraping parameters
-DEFAULT_MAX_PAGES = 3  # Maximum pages to scrape per keyword
+DEFAULT_MAX_PAGES = 2  # Maximum pages to scrape per keyword
 MAX_JOBS_PER_PAGE = 30  # Maximum jobs to process per page
 
 # Chrome debugging configuration
