@@ -12,6 +12,7 @@ import json
 # Add src directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import threading
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 from db_mongo import (
@@ -241,14 +242,16 @@ def api_update_notes(job_id: str):
 
 @app.route("/api/unmatched-jobs/<job_id>/status", methods=["PATCH"])
 def api_update_unmatched_status(job_id: str):
-    """Update user_status of an unmatched (borderline) job."""
+    """Update user_status of an unmatched (borderline) job.
+    When marked as 'watchlist' (Can Apply), also copy the job to matched_jobs.
+    """
     data = request.get_json(silent=True) or {}
     new_status = data.get("user_status", "")
     if new_status not in UNMATCHED_USER_STATUS_MAP:
         return jsonify({"error": f"Invalid user_status. Allowed: {list(UNMATCHED_USER_STATUS_MAP.keys())}"}), 400
 
-    collection = get_collection("jobs")
-    result = collection.update_one(
+    jobs_col = get_collection("jobs")
+    result = jobs_col.update_one(
         {"_id": ObjectId(job_id)},
         {"$set": {"user_status": new_status, "updated_at": datetime.now()}}
     )
@@ -256,7 +259,63 @@ def api_update_unmatched_status(job_id: str):
     if result.matched_count == 0:
         return jsonify({"error": "Job not found"}), 404
 
-    return jsonify({"ok": True, "user_status": new_status})
+    # When marked Can Apply → copy to matched_jobs so it shows in the tracker
+    copied_to_matched = False
+    copy_error = None
+    if new_status == "watchlist":
+        try:
+            job = jobs_col.find_one({"_id": ObjectId(job_id)})
+            if not job:
+                copy_error = "Source job not found after update"
+            else:
+                matched_col = get_collection("matched_jobs")
+                jid    = job.get("job_id") or ""
+                source = job.get("source") or ""
+                now    = datetime.now()
+
+                doc = {
+                    "title":       job.get("title", ""),
+                    "company":     job.get("company", ""),
+                    "location":    job.get("location", ""),
+                    "link":        job.get("link", ""),
+                    "job_id":      jid,
+                    "source":      source,
+                    "description": job.get("description", ""),
+                    "applicants":  job.get("applicants", ""),
+                    "match_score": job.get("match_score", 0),
+                    "recommendation":          job.get("recommendation", ""),
+                    "disqualification_reason": job.get("disqualification_reason", ""),
+                    "match_reasons":           job.get("match_reasons", []),
+                    "missing_requirements":    job.get("missing_requirements", []),
+                    "red_flags":               job.get("red_flags", []),
+                    "nice_to_have_matches":    job.get("nice_to_have_matches", []),
+                    "summary":                 job.get("summary", ""),
+                    "what_youll_do":           job.get("what_youll_do", {"matched": [], "unmatched": []}),
+                    "what_theyre_looking_for": job.get("what_theyre_looking_for", {"matched": [], "unmatched": []}),
+                    "status":         "pending",
+                    "matched_at":     now,   # use NOW so it appears at top of list
+                    "applied_at":     None,
+                    "notes":          "",
+                    "created_at":     now,
+                    "from_unmatched": True,
+                }
+
+                # replace_one with upsert: inserts if not there, updates if already there
+                matched_col.replace_one(
+                    {"job_id": jid, "source": source},
+                    doc,
+                    upsert=True,
+                )
+                copied_to_matched = True
+                print(f"[Can Apply] Copied job_id={jid} source={source} to matched_jobs")
+
+        except Exception as e:
+            copy_error = str(e)
+            print(f"[Can Apply] ERROR copying to matched_jobs: {e}")
+
+    return jsonify({"ok": True, "user_status": new_status,
+                    "copied_to_matched": copied_to_matched,
+                    "copy_error": copy_error})
 
 
 @app.route("/api/stats")
@@ -284,6 +343,89 @@ def api_stats():
             "ai_unmatched": unmatched,
             "applied": by_status.get("applied", 0),
         },
+    })
+
+
+# ─── Manual-apply endpoint ────────────────────────────────────────────────────
+
+# Background task state (one run at a time)
+_manual_apply_lock = threading.Lock()
+_manual_apply_state: dict = {"running": False, "log": [], "done_count": 0, "fail_count": 0}
+
+
+@app.route("/manual-apply")
+def manual_apply_page():
+    return render_template("manual_apply.html")
+
+
+@app.route("/api/manual-apply", methods=["POST"])
+def api_manual_apply():
+    """
+    Accepts a JSON body: {"urls": ["https://...", ...]}
+    Runs the manual-apply scraper in a background thread.
+    Returns immediately with {"status": "started"} or an error.
+    """
+    data = request.get_json(silent=True) or {}
+    urls = data.get("urls", [])
+    if not isinstance(urls, list):
+        return jsonify({"error": "urls must be a list"}), 400
+    urls = [u.strip() for u in urls if isinstance(u, str) and u.strip()]
+    if not urls:
+        return jsonify({"error": "No valid URLs provided"}), 400
+
+    if not _manual_apply_lock.acquire(blocking=False):
+        return jsonify({"error": "A manual-apply run is already in progress. Please wait."}), 429
+
+    def run():
+        try:
+            _manual_apply_state["running"] = True
+            _manual_apply_state["log"] = []
+            _manual_apply_state["done_count"] = 0
+            _manual_apply_state["fail_count"] = 0
+
+            # Import here to avoid circular deps at module load
+            from manual_apply_scraper import process_urls as _process_urls
+
+            # Monkey-patch print so progress goes to the state log
+            import builtins
+            _original_print = builtins.print
+
+            def _capture_print(*args, **kwargs):
+                line = " ".join(str(a) for a in args)
+                _manual_apply_state["log"].append(line)
+                _original_print(*args, **kwargs)
+
+            builtins.print = _capture_print
+            try:
+                _process_urls(urls)
+                # Count results from log
+                for line in _manual_apply_state["log"]:
+                    if "✅ Saved to matched_jobs" in line:
+                        _manual_apply_state["done_count"] += 1
+                    elif "❌ Scraping failed" in line or "Failed  :" in line:
+                        _manual_apply_state["fail_count"] += 1
+            finally:
+                builtins.print = _original_print
+        except Exception as e:
+            _manual_apply_state["log"].append(f"❌ Fatal error: {e}")
+        finally:
+            _manual_apply_state["running"] = False
+            _manual_apply_lock.release()
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    return jsonify({"status": "started", "total": len(urls)})
+
+
+@app.route("/api/manual-apply/status")
+def api_manual_apply_status():
+    """Poll this to get progress of the current / last manual-apply run."""
+    state = _manual_apply_state
+    return jsonify({
+        "running":    state["running"],
+        "log":        state["log"][-100:],   # last 100 lines
+        "done_count": state["done_count"],
+        "fail_count": state["fail_count"],
     })
 
 

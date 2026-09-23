@@ -304,6 +304,7 @@
 <header>
   <a class="logo" href="/unmatched">💼 Unmatched Jobs</a>
   <div class="header-actions">
+    <a class="nav-btn" href="/manual-apply">✍️ Log Applied</a>
     <a class="nav-btn" href="/">← Back to Matched Jobs</a>
     <button class="btn-save" onclick="loadJobs()">↻ Refresh</button>
   </div>
@@ -394,8 +395,18 @@ async function updateUnmatchedStatus(select) {
       body: JSON.stringify({ user_status: userStatus }),
     });
     if (!res.ok) throw new Error('Request failed');
-    const label = userStatus === 'watchlist' ? '⭐ Marked as "Can Apply"' : '✅ Mark removed';
-    showToast(label);
+    const data = await res.json();
+
+    if (userStatus === 'watchlist') {
+      if (data.copy_error) {
+        showToast(`⚠️ Marked but failed to copy to Matched: ${data.copy_error}`, 'err');
+      } else {
+        showToast('⭐ Marked as "Can Apply" — added to Matched Jobs');
+      }
+    } else {
+      showToast('✅ Mark removed');
+    }
+
     // If in watchlist-only mode, reload to reflect removal
     if (watchlistOnly && userStatus !== 'watchlist') loadJobs();
     else loadWatchlistCount();

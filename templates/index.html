@@ -305,6 +305,7 @@
       width: fit-content;
     }
     .btn-apply:hover { opacity: .88; transform: scale(1.02); }
+    .btn-apply.btn-applied { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
 
     /* Status select */
     .status-row { display: flex; gap: 8px; align-items: center; }
@@ -404,6 +405,7 @@
 <header>
   <a class="logo" href="/">💼 Job Tracker</a>
   <div class="header-actions">
+    <a class="nav-btn" href="/manual-apply">✍️ Log Applied</a>
     <a class="nav-btn" href="/unmatched">Unmatched Jobs <b id="unmatchedNavCount"></b></a>
     <button id="refreshBtn" class="btn-save" onclick="loadJobs()" style="padding:6px 14px;font-size:.82rem;">↻ Refresh</button>
   </div>
@@ -679,8 +681,9 @@ function renderCard(job) {
 
     ${matchReasons ? `<ul style="font-size:.78rem;color:var(--muted);padding-left:16px;line-height:1.6;">${matchReasons}</ul>` : ''}
 
-    <a class="btn-apply" href="${escHtml(job.link || '#')}" target="_blank" rel="noopener">
-      🚀 Apply Now
+    <a class="btn-apply ${status === 'applied' ? 'btn-applied' : ''}"
+       href="${escHtml(job.link || '#')}" target="_blank" rel="noopener">
+      ${status === 'applied' ? '🔗 View Detail' : '🚀 Apply Now'}
     </a>
 
     <div class="status-row">
@@ -769,6 +772,18 @@ async function updateStatus(select) {
     if (!res.ok) throw new Error('Request failed');
     showToast(`✅ Status updated to "${STATUS_LABEL[status]}"`);
     loadStats();
+
+    // Immediately update the Apply Now ↔ View Detail button on the card
+    const btn = select.closest('.status-row').previousElementSibling;
+    if (btn && btn.classList.contains('btn-apply')) {
+      if (status === 'applied') {
+        btn.classList.add('btn-applied');
+        btn.innerHTML = '🔗 View Detail';
+      } else {
+        btn.classList.remove('btn-applied');
+        btn.innerHTML = '🚀 Apply Now';
+      }
+    }
   } catch (err) {
     showToast('❌ Status update failed', 'err');
   }

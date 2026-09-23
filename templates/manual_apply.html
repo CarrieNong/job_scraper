@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manual Apply · Job Tracker</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --surface2: #222533;
+      --border:   #2d3148;
+      --text:     #e2e6f0;
+      --muted:    #7b82a0;
+      --accent:   #6c8cff;
+      --green:    #22c55e;
+      --red:      #ef4444;
+      --yellow:   #f59e0b;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── header ── */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(15,17,23,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo { font-size: 1.1rem; font-weight: 700; letter-spacing: .03em; color: var(--accent); text-decoration: none; }
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+    .nav-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 6px 14px;
+      font-size: .82rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── main layout ── */
+    .page { max-width: 780px; margin: 0 auto; padding: 32px 24px 80px; }
+    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 6px; }
+    .subtitle { color: var(--muted); font-size: .9rem; margin-bottom: 28px; line-height: 1.55; }
+
+    /* ── textarea ── */
+    .url-box {
+      width: 100%;
+      min-height: 200px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .85rem;
+      padding: 14px 16px;
+      resize: vertical;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .url-box:focus { border-color: var(--accent); }
+    .url-box::placeholder { color: var(--muted); }
+
+    /* ── buttons ── */
+    .btn-row { display: flex; gap: 12px; margin-top: 14px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 22px;
+      border: none;
+      border-radius: 8px;
+      font-size: .88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-clear   { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+    .btn:disabled { opacity: .45; pointer-events: none; }
+
+    /* ── status banner ── */
+    .status-banner {
+      display: none;
+      margin-top: 18px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: .88rem;
+      font-weight: 600;
+      border: 1px solid transparent;
+    }
+    .status-banner.running  { background: #1e2a45; border-color: var(--accent); color: var(--accent); display: flex; align-items: center; gap: 8px; }
+    .status-banner.success  { background: #0e2e1a; border-color: var(--green);  color: var(--green);  display: block; }
+    .status-banner.error    { background: #2e0e0e; border-color: var(--red);    color: var(--red);    display: block; }
+
+    /* ── spinner ── */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── progress log ── */
+    .log-wrap {
+      display: none;
+      margin-top: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .log-wrap.visible { display: block; }
+    .log-header {
+      padding: 10px 14px;
+      font-size: .78rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .log-body {
+      max-height: 340px;
+      overflow-y: auto;
+      padding: 12px 14px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .78rem;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+    .log-body .ok   { color: var(--green); }
+    .log-body .err  { color: var(--red); }
+    .log-body .info { color: var(--accent); }
+    .log-body .head { color: var(--text); font-weight: 700; }
+
+    /* ── tip box ── */
+    .tip {
+      margin-top: 28px;
+      padding: 14px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: .84rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .tip strong { color: var(--text); }
+    .tip code {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: .82rem;
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="logo" href="/">📋 Job Tracker</a>
+  <div class="header-actions">
+    <a class="nav-btn" href="/">✅ Matched</a>
+    <a class="nav-btn" href="/unmatched">🔍 Unmatched</a>
+  </div>
+</header>
+
+<div class="page">
+  <h1>✍️ Log Manually Applied Jobs</h1>
+  <p class="subtitle">
+    Paste one LinkedIn or Indeed job URL per line below.<br>
+    The scraper will open each URL, run AI matching, and save everything to your tracker with status <strong>Applied</strong> — regardless of score.
+  </p>
+
+  <textarea
+    id="urlBox"
+    class="url-box"
+    placeholder="https://www.linkedin.com/jobs/view/1234567890/
+https://www.linkedin.com/jobs/view/9876543210/
+https://de.indeed.com/viewjob?jk=abcdef123456"
+  ></textarea>
+
+  <div class="btn-row">
+    <button id="submitBtn" class="btn btn-primary" onclick="submitUrls()">
+      🚀 Scrape &amp; Mark Applied
+    </button>
+    <button class="btn btn-clear" onclick="document.getElementById('urlBox').value=''">
+      🗑 Clear
+    </button>
+  </div>
+
+  <div id="statusBanner" class="status-banner"></div>
+
+  <div id="logWrap" class="log-wrap">
+    <div class="log-header">
+      <span>Live Progress</span>
+      <span id="logCounter" style="color:var(--text)"></span>
+    </div>
+    <div id="logBody" class="log-body"></div>
+  </div>
+
+  <div class="tip">
+    <strong>💡 Tips</strong><br>
+    • Make sure Chrome is open and you are <strong>logged in</strong> to LinkedIn / Indeed in the debug Chrome session.<br>
+    • LinkedIn canonical URL: <code>https://www.linkedin.com/jobs/view/JOB_ID/</code><br>
+    • Indeed URL: <code>https://de.indeed.com/viewjob?jk=JOB_KEY</code><br>
+    • You can also run from the terminal:<br>
+    &nbsp;&nbsp;<code>python src/manual_apply_scraper.py "URL1" "URL2"</code><br>
+    &nbsp;&nbsp;<code>python src/manual_apply_scraper.py --file my_urls.txt</code>
+  </div>
+</div>
+
+<script>
+let _pollTimer = null;
+let _knownLogLen = 0;
+
+function colorLine(line) {
+  const l = line.trim();
+  if (l.startsWith('✅') || l.includes('Saved to matched_jobs') || l.startsWith('Success')) return `<span class="ok">${esc(line)}</span>`;
+  if (l.startsWith('❌') || l.startsWith('✗') || l.includes('failed') || l.includes('Failed')) return `<span class="err">${esc(line)}</span>`;
+  if (l.startsWith('===') || l.startsWith('[') && l.includes('/')) return `<span class="head">${esc(line)}</span>`;
+  if (l.startsWith('🤖') || l.startsWith('✨') || l.startsWith('→') || l.startsWith('  →')) return `<span class="info">${esc(line)}</span>`;
+  return esc(line);
+}
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function submitUrls() {
+  const raw = document.getElementById('urlBox').value.trim();
+  if (!raw) { alert('Please enter at least one URL.'); return; }
+
+  const urls = raw.split('\n')
+    .map(u => u.trim())
+    .filter(u => u && !u.startsWith('#'));
+
+  if (urls.length === 0) { alert('No valid URLs found.'); return; }
+
+  setBanner('running', `<div class="spinner"></div> Scraping ${urls.length} URL(s) in the background…`);
+  document.getElementById('submitBtn').disabled = true;
+  document.getElementById('logWrap').classList.add('visible');
+  document.getElementById('logBody').innerHTML = '';
+  _knownLogLen = 0;
+
+  try {
+    const res = await fetch('/api/manual-apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setBanner('error', '❌ ' + (data.error || 'Failed to start'));
+      document.getElementById('submitBtn').disabled = false;
+      return;
+    }
+    // Start polling
+    _pollTimer = setInterval(pollStatus, 1500);
+  } catch(e) {
+    setBanner('error', '❌ Network error: ' + e.message);
+    document.getElementById('submitBtn').disabled = false;
+  }
+}
+
+async function pollStatus() {
+  try {
+    const res = await fetch('/api/manual-apply/status');
+    const data = await res.json();
+
+    // Append new log lines
+    const logBody = document.getElementById('logBody');
+    const lines = data.log || [];
+    if (lines.length > _knownLogLen) {
+      const newLines = lines.slice(_knownLogLen);
+      newLines.forEach(line => {
+        const div = document.createElement('div');
+        div.innerHTML = colorLine(line);
+        logBody.appendChild(div);
+      });
+      _knownLogLen = lines.length;
+      logBody.scrollTop = logBody.scrollHeight;
+    }
+
+    // Update counter
+    document.getElementById('logCounter').textContent =
+      `✅ ${data.done_count}  ❌ ${data.fail_count}`;
+
+    if (!data.running) {
+      clearInterval(_pollTimer);
+      document.getElementById('submitBtn').disabled = false;
+      if (data.fail_count > 0 && data.done_count === 0) {
+        setBanner('error', `❌ All ${data.fail_count} URL(s) failed. Check the log above.`);
+      } else if (data.fail_count > 0) {
+        setBanner('success', `✅ Done — ${data.done_count} saved, ${data.fail_count} failed. <a href="/" style="color:var(--accent)">View Matched →</a>`);
+      } else {
+        setBanner('success', `✅ Done — ${data.done_count} job(s) saved as Applied. <a href="/" style="color:var(--accent)">View Matched →</a>`);
+      }
+    }
+  } catch(e) {
+    // ignore transient network errors
+  }
+}
+
+function setBanner(type, html) {
+  const el = document.getElementById('statusBanner');
+  el.className = 'status-banner ' + type;
+  el.innerHTML = html;
+}
+</script>
+</body>
+</html>
