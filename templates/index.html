@@ -21,6 +21,7 @@
       --rejected:   #ef4444;
       --interview:  #f59e0b;
       --unsuitable: #8b5cf6;
+      --closed:     #71717a;
     }
 
     body {
@@ -84,6 +85,7 @@
     .dot-rejected   { background: var(--rejected); }
     .dot-interview  { background: var(--interview); }
     .dot-unsuitable { background: var(--unsuitable); }
+    .dot-closed     { background: var(--closed); }
 
     /* ── Pipeline funnel ──────────────────────────────────────────── */
     .funnel-bar {
@@ -170,12 +172,26 @@
       padding: 12px 2px 6px;
       border-bottom: 1px solid var(--border);
       margin-bottom: 2px;
+      cursor: pointer;
+      user-select: none;
+      transition: color .15s;
     }
+    .date-group-header:hover { color: var(--text); }
     .date-group-header .dg-count {
       font-weight: 500;
       font-size: .75rem;
       color: var(--border);
     }
+    .date-group-header .dg-toggle {
+      display: inline-block;
+      font-size: .7rem;
+      color: var(--muted);
+      transition: transform .2s;
+      flex-shrink: 0;
+    }
+    .date-group-header.collapsed .dg-toggle { transform: rotate(-90deg); }
+    .date-group-cards { grid-column: 1 / -1; display: contents; }
+    .date-group-cards.hidden > * { display: none !important; }
 
     /* ── Job grid ─────────────────────────────────────────────────── */
     .job-grid {
@@ -327,6 +343,7 @@
     .status-select.s-rejected   { border-color: var(--rejected);   color: var(--rejected); }
     .status-select.s-interview  { border-color: var(--interview);  color: var(--interview); }
     .status-select.s-unsuitable { border-color: var(--unsuitable); color: var(--unsuitable); }
+    .status-select.s-closed     { border-color: var(--closed);     color: var(--closed); }
 
     /* Notes */
     .notes-wrap { display: flex; flex-direction: column; gap: 6px; }
@@ -514,6 +531,10 @@
     <span class="dot dot-unsuitable"></span>
     <span>Unsuitable <b id="cnt-unsuitable">–</b></span>
   </div>
+  <div class="stat-chip" data-status="closed" onclick="setStatusFilter('closed')">
+    <span class="dot dot-closed"></span>
+    <span>Closed <b id="cnt-closed">–</b></span>
+  </div>
 </div>
 
 <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
@@ -553,6 +574,7 @@
 let currentStatusFilter = 'all';
 let debounceTimer = null;
 let dateDebounceTimer = null;
+const collapsedGroups = new Set(); // tracks which date groups are collapsed
 
 const STATUS_LABEL = {
   pending:    'Not Applied',
@@ -560,6 +582,7 @@ const STATUS_LABEL = {
   rejected:   'Rejected',
   interview:  'Interview',
   unsuitable: 'Unsuitable',
+  closed:     'Closed',
 };
 
 /* ── Toast ───────────────────────────────────────────────────────── */
@@ -586,7 +609,7 @@ async function loadStats() {
       const el = document.getElementById(`cnt-${status}`);
       if (el) el.textContent = cnt;
     }
-    ['pending','applied','rejected','interview','unsuitable'].forEach(s => {
+    ['pending','applied','rejected','interview','unsuitable','closed'].forEach(s => {
       if (!data.by_status[s]) {
         const el = document.getElementById(`cnt-${s}`);
         if (el) el.textContent = 0;
@@ -671,6 +694,19 @@ function groupJobsByDate(jobs) {
     groups.get(dateStr).push(job);
   });
   return [...groups.entries()];
+}
+
+/* ── Toggle date group collapse ──────────────────────────────────── */
+function toggleGroup(dateStr, headerEl) {
+  const nowCollapsed = !collapsedGroups.has(dateStr);
+  if (nowCollapsed) {
+    collapsedGroups.add(dateStr);
+  } else {
+    collapsedGroups.delete(dateStr);
+  }
+  headerEl.classList.toggle('collapsed', nowCollapsed);
+  const container = document.querySelector(`.date-group-cards[data-group="${CSS.escape(dateStr)}"]`);
+  if (container) container.classList.toggle('hidden', nowCollapsed);
 }
 
 /* ── Score badge class ───────────────────────────────────────────── */
@@ -765,6 +801,7 @@ function renderCard(job) {
         <option value="interview"  ${status==='interview'  ? 'selected':''}>🤝 Interview</option>
         <option value="rejected"   ${status==='rejected'   ? 'selected':''}>❌ Rejected</option>
         <option value="unsuitable" ${status==='unsuitable' ? 'selected':''}>🚫 Unsuitable</option>
+        <option value="closed"     ${status==='closed'     ? 'selected':''}>🔒 Closed</option>
       </select>
     </div>
 
@@ -813,14 +850,31 @@ async function loadJobs() {
       return;
     }
 
-    // Group by date and render
+    // Group by date and render with collapsible support
     const groups = groupJobsByDate(data.jobs);
     groups.forEach(([dateStr, jobs]) => {
+      const isCollapsed = collapsedGroups.has(dateStr);
+
+      // Header
       const hdr = document.createElement('div');
-      hdr.className = 'date-group-header';
-      hdr.innerHTML = `<span>${formatGroupDate(dateStr)}</span><span class="dg-count">${jobs.length} jobs</span>`;
+      hdr.className = 'date-group-header' + (isCollapsed ? ' collapsed' : '');
+      hdr.innerHTML = `
+        <span class="dg-toggle">▾</span>
+        <span>${formatGroupDate(dateStr)}</span>
+        <span class="dg-count">${jobs.length} jobs</span>
+      `;
+      hdr.addEventListener('click', () => toggleGroup(dateStr, hdr));
       grid.appendChild(hdr);
-      jobs.forEach(job => grid.appendChild(renderCard(job)));
+
+      // Cards container (display:contents so cards stay in the outer grid)
+      const container = document.createElement('div');
+      container.className = 'date-group-cards' + (isCollapsed ? ' hidden' : '');
+      container.dataset.group = dateStr;
+      jobs.forEach(job => {
+        const card = renderCard(job);
+        container.appendChild(card);
+      });
+      grid.appendChild(container);
     });
   } catch (err) {
     grid.innerHTML = `<div class="empty"><h2>Loading Failed</h2><p>${err.message}</p></div>`;

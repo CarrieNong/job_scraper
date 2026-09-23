@@ -39,6 +39,7 @@ STATUS_MAP = {
     "rejected":   "Rejected",
     "interview":  "Interview",
     "unsuitable": "Unsuitable",
+    "closed":     "Closed",
 }
 
 # Unmatched jobs user_status mapping (for 6-7 score borderline jobs)
