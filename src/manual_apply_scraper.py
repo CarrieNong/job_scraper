@@ -28,6 +28,9 @@ import argparse
 from datetime import datetime
 from typing import Optional
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # ── path setup ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -36,7 +39,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 from db_mongo import init_db, get_collection, mark_job_as_matched, save_job
 from ai_matcher import analyze_job_with_ai, load_user_profile, load_matching_criteria, _analysis_fields
-from scraper_utils import connect_browser, strip_html, pause, detect_job_detail_language, safe_text, safe_attr
+from scraper_utils import connect_browser, strip_html, pause, detect_job_detail_language, safe_text
 from config import INDEED_CONFIG
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -72,20 +75,6 @@ def extract_indeed_job_id(url: str) -> Optional[str]:
     if m:
         return m.group(1)
     return None
-
-
-def safe_text_from(page, *selectors, timeout=5000) -> str:
-    """Try each selector in order and return the first non-empty text."""
-    for sel in selectors:
-        try:
-            loc = page.locator(sel).first
-            if loc.count() > 0:
-                text = (loc.inner_text(timeout=timeout) or "").strip()
-                if text:
-                    return text
-        except Exception:
-            pass
-    return ""
 
 
 # ── per-source scrapers ───────────────────────────────────────────────────────
@@ -149,20 +138,24 @@ def scrape_linkedin_job(page, url: str) -> Optional[dict]:
         page.locator(".job-details-jobs-unified-top-card__tertiary-description-container")
     )
 
-    # Description: exact ID first, then fallbacks
+    # Description: lazy-column first (new LinkedIn layout), then classic fallbacks.
+    # Always use inner_html + strip_html so no HTML/CSS leaks into the stored text.
     description = ""
     for sel in [
-        f"#JobDetails_AboutTheJob_jobs_{job_id}",   # exact ID with job_id
-        "[id*='JobDetails_AboutTheJob']",            # partial ID match
-        ".jobs-box__html-content",                   # older layout
+        '[data-testid="lazy-column"]',               # new LinkedIn lazy-load column
+        f"#JobDetails_AboutTheJob_jobs_{job_id}",    # exact ID with job_id
+        "[id*='JobDetails_AboutTheJob']",             # partial ID match
+        ".jobs-box__html-content",                    # older layout
     ]:
         try:
             loc = page.locator(sel).first
             if loc.count() > 0:
-                description = safe_text(loc, timeout=5000)
-                if description:
-                    print(f"  🔍 Description found via: {sel}")
-                    break
+                desc_html = loc.inner_html(timeout=5000) or ""
+                if desc_html:
+                    description = strip_html(desc_html)
+                    if description:
+                        print(f"  🔍 Description found via: {sel}")
+                        break
         except Exception:
             pass
 
@@ -236,45 +229,15 @@ def scrape_indeed_job(page, url: str) -> Optional[dict]:
 
     pause(1.5, 2.5)
 
-    # ── Title ─────────────────────────────────────────────────────────────
-    # Try the span's title attribute first (more reliable on Indeed DE,
-    # same strategy as indeed_scraper.py → extract_card_fields)
+    # title / company / location are left empty here.
+    # AI will infer them from the description text in process_urls.
     title = ""
-    for sel in [
-        'h1[data-testid="simpler-jobTitle"]',
-        "h1.jobsearch-JobInfoHeader-title",
-        "h1",
-    ]:
-        try:
-            loc = page.locator(sel).first
-            if loc.count() > 0:
-                # Prefer title attribute on inner span (Indeed DE sets it reliably)
-                span = loc.locator("span").first
-                title = safe_attr(span, "title") or safe_text(span) or safe_text(loc)
-                if title:
-                    break
-        except Exception:
-            pass
-
-    # ── Company ───────────────────────────────────────────────────────────
-    company = safe_text_from(
-        page,
-        '[data-testid="inlineHeader-companyName"] a',
-        '[data-testid="inlineHeader-companyName"]',
-        ".icl-u-lg-mr--sm",
-        '[data-company-name="true"]',
-    )
-
-    # ── Location ──────────────────────────────────────────────────────────
-    location = safe_text_from(
-        page,
-        '[data-testid="job-location"]',
-        ".icl-u-xs-mt--xs",
-        ".jobsearch-JobInfoHeader-subtitle div",
-    )
+    company = ""
+    location = ""
 
     # ── Description ───────────────────────────────────────────────────────
-    # Use DETAIL_SELECTOR from config (same as indeed_scraper.py)
+    # Grab everything inside [data-testid="viewjob-main-content"] (the full
+    # job-detail container) and strip all HTML/CSS before storing.
     description = ""
     for sel in [_INDEED_DETAIL_SELECTOR, "#jobDescriptionText"]:
         try:
@@ -283,8 +246,9 @@ def scrape_indeed_job(page, url: str) -> Optional[dict]:
                 desc_html = loc.inner_html(timeout=8000) or ""
                 if desc_html:
                     description = strip_html(desc_html)
-                    print(f"  🔍 Description found via: {sel}")
-                    break
+                    if description:
+                        print(f"  🔍 Description found via: {sel}")
+                        break
         except Exception:
             pass
 
@@ -299,6 +263,61 @@ def scrape_indeed_job(page, url: str) -> Optional[dict]:
         "source": "indeed",
         "status": "applied",
     }
+
+
+# ── AI metadata inference ─────────────────────────────────────────────────────
+
+def infer_job_metadata_with_ai(description_text: str) -> dict:
+    """
+    Ask AI to infer job title, company, and location from plain-text description.
+
+    The text passed in must already be stripped of HTML/CSS.
+    Returns a dict with keys: title, company, location (any may be empty string).
+    """
+    from openai import OpenAI
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        print("  ⚠️  No OPENAI_API_KEY found – cannot infer job metadata")
+        return {}
+
+    ai_model = os.getenv("AI_MODEL", "gpt-4o-mini")
+
+    # Truncate so the prompt stays cheap; 3 000 chars is plenty for header info
+    trimmed = description_text[:3000]
+
+    prompt = (
+        "The following text was extracted from a LinkedIn job posting. "
+        "Based only on the text below, infer the job title, company name, and location. "
+        "If you cannot determine a field with reasonable confidence, return an empty string.\n\n"
+        f"Job description text:\n{trimmed}\n\n"
+        "Respond ONLY with valid JSON:\n"
+        '{"title": "<job title>", "company": "<company name>", "location": "<location>"}'
+    )
+
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model=ai_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You extract job metadata (title, company, location) from job-posting text. "
+                        "Respond only with valid JSON containing exactly three keys: "
+                        "title, company, location."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content)
+        return result
+    except Exception as e:
+        print(f"  ⚠️  AI metadata inference failed: {e}")
+        return {}
 
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
@@ -346,6 +365,10 @@ def force_save_applied_job(job: dict, analysis: dict, applied_date: datetime = N
     )
 
     # ── 2. Upsert into matched_jobs collection ───────────────────────────
+    # NOTE: created_at must NOT appear in $set — it lives only in $setOnInsert
+    # so that re-runs do not overwrite the original insert timestamp.
+    # Putting the same key in both $set and $setOnInsert causes a MongoDB
+    # WriteError ("conflict at 'created_at'") and silently aborts the write.
     matched_data = {
         "title":       job.get("title", ""),
         "company":     job.get("company", ""),
@@ -361,16 +384,20 @@ def force_save_applied_job(job: dict, analysis: dict, applied_date: datetime = N
         "matched_at":  t,
         "applied_at":  t,
         "updated_at":  t,
-        "created_at":  t,
+        # created_at is intentionally omitted here — set only on first insert below
         "notes":       "",
         "manually_applied": True,
     }
 
-    matched_col.update_one(
-        {"job_id": job_id, "source": source},
-        {"$set": matched_data, "$setOnInsert": {"created_at": t}},
-        upsert=True,
-    )
+    try:
+        matched_col.update_one(
+            {"job_id": job_id, "source": source},
+            {"$set": matched_data, "$setOnInsert": {"created_at": t}},
+            upsert=True,
+        )
+    except Exception as e:
+        print(f"  ❌ Failed to save to matched_jobs: {type(e).__name__}: {e}")
+        return False
     return True
 
 
@@ -441,6 +468,23 @@ def process_urls(urls: list[str], applied_date: datetime = None):
                 print("  ⚠️  Description is empty — page may not have loaded or login required. Skipping.")
                 results["failed"].append(url)
                 continue
+
+            # For LinkedIn/Indeed the detail panel may not expose title/company/location
+            # as separate DOM elements. Ask AI to infer any missing fields from the
+            # plain-text description (already stripped of HTML/CSS).
+            if not (job.get("title") and job.get("company") and job.get("location")):
+                missing = [f for f in ("title", "company", "location") if not job.get(f)]
+                print(f"  🤖 Inferring missing field(s) {missing} from description via AI…")
+                metadata = infer_job_metadata_with_ai(job.get("description", ""))
+                if metadata:
+                    for field in ("title", "company", "location"):
+                        if not job.get(field):
+                            job[field] = metadata.get(field, "")
+                    print(
+                        f"  🤖 Inferred → title='{job.get('title')}'"
+                        f"  company='{job.get('company')}'"
+                        f"  location='{job.get('location')}'"
+                    )
 
             # Fill in a fallback title so the AI prompt always has something
             if not job.get("title"):
