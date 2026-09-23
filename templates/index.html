@@ -397,6 +397,60 @@
     .toast.show { transform: translateY(0); opacity: 1; }
     .toast.ok   { border-color: #22c55e; color: #22c55e; }
     .toast.err  { border-color: #ef4444; color: #ef4444; }
+
+    /* ── Inline edit (title / company / location) ───────────────── */
+    .card-title-block { position: relative; }
+    .edit-info-btn {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 6px;
+      padding: 1px 5px;
+      font-size: .7rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--muted);
+      cursor: pointer;
+      vertical-align: middle;
+      transition: border-color .15s, color .15s;
+      opacity: 0;
+    }
+    .card:hover .edit-info-btn { opacity: 1; }
+    .edit-info-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .info-edit { display: none; flex-direction: column; gap: 6px; margin-top: 2px; }
+    .info-edit.active { display: flex; }
+    .info-input {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: .84rem;
+      padding: 6px 9px;
+      outline: none;
+      width: 100%;
+      transition: border-color .15s;
+      font-family: inherit;
+    }
+    .info-input:focus { border-color: var(--accent); }
+    .info-input::placeholder { color: var(--muted); }
+    .info-edit-row { display: flex; gap: 6px; }
+    .info-edit-row .info-input { flex: 1; }
+    .info-action-row { display: flex; gap: 6px; }
+    .info-save-btn, .info-cancel-btn {
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: .78rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: border-color .15s, color .15s;
+    }
+    .info-save-btn   { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .info-save-btn:hover { opacity: .85; }
+    .info-save-btn:disabled { opacity: .45; cursor: default; }
+    .info-cancel-btn { background: transparent; color: var(--muted); }
+    .info-cancel-btn:hover { border-color: var(--accent); color: var(--accent); }
   </style>
 </head>
 <body>
@@ -661,9 +715,27 @@ function renderCard(job) {
 
   card.innerHTML = `
     <div class="card-header">
-      <div class="card-title-block">
-        <div class="card-title">${escHtml(job.title || '(No Title)')}</div>
-        <div class="card-company">${escHtml(job.company || '')}${job.location ? ' · ' + escHtml(job.location) : ''}</div>
+      <div class="card-title-block" data-id="${job._id}">
+        <!-- View mode -->
+        <div class="info-view">
+          <div class="card-title">
+            <span class="card-title-text">${escHtml(job.title || '(No Title)')}</span>
+            <button class="edit-info-btn" onclick="openEditInfo(this)" title="Edit title / company / location">✏️ Edit</button>
+          </div>
+          <div class="card-company">${escHtml(job.company || '')}${job.location ? ' · ' + escHtml(job.location) : ''}</div>
+        </div>
+        <!-- Edit mode -->
+        <div class="info-edit">
+          <input class="info-input" data-field="title"    value="${escHtml(job.title    || '')}" placeholder="Job Title" />
+          <div class="info-edit-row">
+            <input class="info-input" data-field="company"  value="${escHtml(job.company  || '')}" placeholder="Company" />
+            <input class="info-input" data-field="location" value="${escHtml(job.location || '')}" placeholder="Location" />
+          </div>
+          <div class="info-action-row">
+            <button class="info-save-btn"   onclick="saveJobInfo(this)">✓ Save</button>
+            <button class="info-cancel-btn" onclick="cancelEditInfo(this)">✕ Cancel</button>
+          </div>
+        </div>
       </div>
       <div class="score-badge ${scoreCls(job.match_score || 0)}">${score}</div>
     </div>
@@ -808,6 +880,58 @@ async function saveNotes(btn) {
     showToast('📝 Notes saved');
   } catch (err) {
     showToast('❌ Notes save failed', 'err');
+  }
+}
+
+/* ── Edit job info (title / company / location) ──────────────────── */
+function openEditInfo(btn) {
+  const block = btn.closest('.card-title-block');
+  block.querySelector('.info-view').style.display = 'none';
+  const edit = block.querySelector('.info-edit');
+  edit.classList.add('active');
+  edit.querySelector('[data-field="title"]').select();
+}
+
+function cancelEditInfo(btn) {
+  const block = btn.closest('.card-title-block');
+  block.querySelector('.info-view').style.display = '';
+  block.querySelector('.info-edit').classList.remove('active');
+}
+
+async function saveJobInfo(btn) {
+  const block   = btn.closest('.card-title-block');
+  const id      = block.dataset.id;
+  const inputs  = block.querySelectorAll('.info-input');
+  const payload = {};
+  inputs.forEach(inp => { payload[inp.dataset.field] = inp.value; });
+
+  btn.disabled    = true;
+  btn.textContent = '⏳';
+
+  try {
+    const res = await fetch(`/api/jobs/${id}/info`, {
+      method:  'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Request failed');
+
+    // Update view mode text
+    const view = block.querySelector('.info-view');
+    const titleSpan = view.querySelector('.card-title-text');
+    if (titleSpan) titleSpan.textContent = payload.title || '(No Title)';
+    view.querySelector('.card-company').textContent =
+      (payload.company || '') + (payload.location ? ' · ' + payload.location : '');
+
+    // Switch back to view mode
+    view.style.display = '';
+    block.querySelector('.info-edit').classList.remove('active');
+    showToast('✅ Job info updated');
+  } catch (err) {
+    showToast('❌ Update failed', 'err');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '✓ Save';
   }
 }
 

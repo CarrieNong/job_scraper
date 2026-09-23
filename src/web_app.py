@@ -240,6 +240,33 @@ def api_update_notes(job_id: str):
     return jsonify({"ok": True})
 
 
+@app.route("/api/jobs/<job_id>/info", methods=["PATCH"])
+def api_update_job_info(job_id: str):
+    """Update job title / company / location in matched_jobs."""
+    data = request.get_json(silent=True) or {}
+    update_fields = {}
+    for field in ("title", "company", "location"):
+        if field in data and isinstance(data[field], str):
+            update_fields[field] = data[field].strip()
+
+    if not update_fields:
+        return jsonify({"error": "No fields to update"}), 400
+
+    try:
+        oid = ObjectId(job_id)
+    except Exception:
+        return jsonify({"error": "Invalid job ID"}), 400
+
+    update_fields["updated_at"] = datetime.now()
+    collection = get_collection("matched_jobs")
+    result = collection.update_one({"_id": oid}, {"$set": update_fields})
+
+    if result.matched_count == 0:
+        return jsonify({"error": "Job not found"}), 404
+
+    return jsonify({"ok": True})
+
+
 @app.route("/api/unmatched-jobs/<job_id>/status", methods=["PATCH"])
 def api_update_unmatched_status(job_id: str):
     """Update user_status of an unmatched (borderline) job.
