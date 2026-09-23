@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Job Tracker · 求职追踪</title>
+  <title>Job Tracker</title>
   <style>
     /* ── Reset & base ─────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -404,8 +404,8 @@
 <header>
   <a class="logo" href="/">💼 Job Tracker</a>
   <div class="header-actions">
-    <a class="nav-btn" href="/unmatched">未匹配岗位 <b id="unmatchedNavCount"></b></a>
-    <button id="refreshBtn" class="btn-save" onclick="loadJobs()" style="padding:6px 14px;font-size:.82rem;">↻ 刷新</button>
+    <a class="nav-btn" href="/unmatched">Unmatched Jobs <b id="unmatchedNavCount"></b></a>
+    <button id="refreshBtn" class="btn-save" onclick="loadJobs()" style="padding:6px 14px;font-size:.82rem;">↻ Refresh</button>
   </div>
 </header>
 
@@ -413,22 +413,22 @@
 <div class="funnel-bar" id="funnelBar">
   <div class="funnel-step f-clicked">
     <div class="funnel-num" id="f-clicked">–</div>
-    <div class="funnel-label">标题通过 · 已点击</div>
+    <div class="funnel-label">Title Passed · Clicked</div>
   </div>
   <div class="funnel-sep">▸</div>
   <div class="funnel-step f-german">
     <div class="funnel-num" id="f-german">–</div>
-    <div class="funnel-label">德语过滤</div>
+    <div class="funnel-label">German Filtered</div>
   </div>
   <div class="funnel-sep">▸</div>
   <div class="funnel-step f-matched">
     <div class="funnel-num" id="f-matched">–</div>
-    <div class="funnel-label">AI 匹配通过</div>
+    <div class="funnel-label">AI Matched</div>
   </div>
   <div class="funnel-sep">▸</div>
   <div class="funnel-step f-applied">
     <div class="funnel-num" id="f-applied">–</div>
-    <div class="funnel-label">已投递</div>
+    <div class="funnel-label">Applied</div>
   </div>
 </div>
 
@@ -436,49 +436,49 @@
 <div class="stats-bar" id="statsBar">
   <div class="stat-chip active" data-status="all"   onclick="setStatusFilter('all')">
     <span class="dot dot-all"></span>
-    <span>全部 <b id="cnt-all">–</b></span>
+    <span>All <b id="cnt-all">–</b></span>
   </div>
   <div class="stat-chip" data-status="pending"   onclick="setStatusFilter('pending')">
     <span class="dot dot-pending"></span>
-    <span>未投递 <b id="cnt-pending">–</b></span>
+    <span>Not Applied <b id="cnt-pending">–</b></span>
   </div>
   <div class="stat-chip" data-status="applied"   onclick="setStatusFilter('applied')">
     <span class="dot dot-applied"></span>
-    <span>已投递 <b id="cnt-applied">–</b></span>
+    <span>Applied <b id="cnt-applied">–</b></span>
   </div>
   <div class="stat-chip" data-status="interview" onclick="setStatusFilter('interview')">
     <span class="dot dot-interview"></span>
-    <span>面试中 <b id="cnt-interview">–</b></span>
+    <span>Interview <b id="cnt-interview">–</b></span>
   </div>
   <div class="stat-chip" data-status="rejected"  onclick="setStatusFilter('rejected')">
     <span class="dot dot-rejected"></span>
-    <span>已拒绝 <b id="cnt-rejected">–</b></span>
+    <span>Rejected <b id="cnt-rejected">–</b></span>
   </div>
   <div class="stat-chip" data-status="unsuitable" onclick="setStatusFilter('unsuitable')">
     <span class="dot dot-unsuitable"></span>
-    <span>不符合 <b id="cnt-unsuitable">–</b></span>
+    <span>Unsuitable <b id="cnt-unsuitable">–</b></span>
   </div>
 </div>
 
 <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
 <div class="toolbar">
-  <input type="search" id="searchInput" placeholder="🔍 搜索职位 / 公司名…" oninput="debounceLoad()" />
+  <input type="search" id="searchInput" placeholder="🔍 Search jobs / company…" oninput="debounceLoad()" />
   <select id="sourceFilter" onchange="loadJobs()">
-    <option value="all">全部来源</option>
+    <option value="all">All Sources</option>
     <option value="linkedin">LinkedIn</option>
     <option value="indeed">Indeed</option>
   </select>
   <select id="timePreset" onchange="onTimePresetChange()">
-    <option value="all">全部时间</option>
-    <option value="today">今天</option>
-    <option value="3">近 3 天</option>
-    <option value="7">近 7 天</option>
-    <option value="30">近 30 天</option>
-    <option value="custom">自定义时间</option>
+    <option value="all">All Time</option>
+    <option value="today">Today</option>
+    <option value="3">Last 3 Days</option>
+    <option value="7">Last 7 Days</option>
+    <option value="30">Last 30 Days</option>
+    <option value="custom">Custom Time</option>
   </select>
   <div class="filter-group hidden-filter" id="customDateGroup">
     <input type="date" id="dateFrom" />
-    <span>至</span>
+    <span>to</span>
     <input type="date" id="dateTo" />
   </div>
   <span class="count-label" id="countLabel"></span>
@@ -499,11 +499,11 @@ let debounceTimer = null;
 let dateDebounceTimer = null;
 
 const STATUS_LABEL = {
-  pending:    '未投递',
-  applied:    '已投递',
-  rejected:   '已拒绝',
-  interview:  '面试中',
-  unsuitable: '不符合',
+  pending:    'Not Applied',
+  applied:    'Applied',
+  rejected:   'Rejected',
+  interview:  'Interview',
+  unsuitable: 'Unsuitable',
 };
 
 /* ── Toast ───────────────────────────────────────────────────────── */
@@ -571,12 +571,12 @@ function formatDate(date) {
 }
 
 function formatGroupDate(dateStr) {
-  if (!dateStr) return '未知日期';
+  if (!dateStr) return 'Unknown Date';
   const today = formatDate(new Date());
   const yd = new Date(); yd.setDate(yd.getDate() - 1);
   const yesterday = formatDate(yd);
-  if (dateStr === today) return `今天 · ${dateStr}`;
-  if (dateStr === yesterday) return `昨天 · ${dateStr}`;
+  if (dateStr === today) return `Today · ${dateStr}`;
+  if (dateStr === yesterday) return `Yesterday · ${dateStr}`;
   return dateStr;
 }
 
@@ -610,7 +610,7 @@ function currentDateRange() {
 function groupJobsByDate(jobs) {
   const groups = new Map();
   jobs.forEach(job => {
-    const dateStr = (job.matched_at || '').split(' ')[0] || '未知日期';
+    const dateStr = (job.matched_at || '').split(' ')[0] || 'Unknown Date';
     if (!groups.has(dateStr)) groups.set(dateStr, []);
     groups.get(dateStr).push(job);
   });
@@ -637,7 +637,7 @@ function renderBreakdown(title, section) {
   ].join('');
   return `
     <details class="breakdown">
-      <summary><span>${title}</span><span class="bd-count">${matched.length}/${total} 匹配</span></summary>
+      <summary><span>${title}</span><span class="bd-count">${matched.length}/${total} matched</span></summary>
       <ul class="bd-list">${items}</ul>
     </details>`;
 }
@@ -660,7 +660,7 @@ function renderCard(job) {
   card.innerHTML = `
     <div class="card-header">
       <div class="card-title-block">
-        <div class="card-title">${escHtml(job.title || '（无标题）')}</div>
+        <div class="card-title">${escHtml(job.title || '(No Title)')}</div>
         <div class="card-company">${escHtml(job.company || '')}${job.location ? ' · ' + escHtml(job.location) : ''}</div>
       </div>
       <div class="score-badge ${scoreCls(job.match_score || 0)}">${score}</div>
@@ -680,16 +680,16 @@ function renderCard(job) {
     ${matchReasons ? `<ul style="font-size:.78rem;color:var(--muted);padding-left:16px;line-height:1.6;">${matchReasons}</ul>` : ''}
 
     <a class="btn-apply" href="${escHtml(job.link || '#')}" target="_blank" rel="noopener">
-      🚀 前往投递
+      🚀 Apply Now
     </a>
 
     <div class="status-row">
       <select class="status-select s-${status}" data-id="${job._id}" onchange="updateStatus(this)">
-        <option value="pending"    ${status==='pending'    ? 'selected':''}>📋 未投递</option>
-        <option value="applied"    ${status==='applied'    ? 'selected':''}>✅ 已投递</option>
-        <option value="interview"  ${status==='interview'  ? 'selected':''}>🤝 面试中</option>
-        <option value="rejected"   ${status==='rejected'   ? 'selected':''}>❌ 已拒绝</option>
-        <option value="unsuitable" ${status==='unsuitable' ? 'selected':''}>🚫 不符合</option>
+        <option value="pending"    ${status==='pending'    ? 'selected':''}>📋 Not Applied</option>
+        <option value="applied"    ${status==='applied'    ? 'selected':''}>✅ Applied</option>
+        <option value="interview"  ${status==='interview'  ? 'selected':''}>🤝 Interview</option>
+        <option value="rejected"   ${status==='rejected'   ? 'selected':''}>❌ Rejected</option>
+        <option value="unsuitable" ${status==='unsuitable' ? 'selected':''}>🚫 Unsuitable</option>
       </select>
     </div>
 
@@ -697,10 +697,10 @@ function renderCard(job) {
       <textarea
         class="notes-textarea"
         data-id="${job._id}"
-        placeholder="备注：面试后拒绝 / 直接拒绝 / 薪资不符…"
+        placeholder="Notes: Rejected after interview / Direct rejection / Salary mismatch…"
         rows="2"
       >${escHtml(job.notes || '')}</textarea>
-      <button class="btn-save" data-id="${job._id}" onclick="saveNotes(this)">保存备注</button>
+      <button class="btn-save" data-id="${job._id}" onclick="saveNotes(this)">Save Notes</button>
     </div>
   `;
   return card;
@@ -727,13 +727,13 @@ async function loadJobs() {
     const data = await res.json();
 
     grid.innerHTML = '';
-    document.getElementById('countLabel').textContent = `共 ${data.total} 条`;
+    document.getElementById('countLabel').textContent = `Total ${data.total}`;
 
     if (!data.jobs.length) {
       grid.innerHTML = `
         <div class="empty">
-          <h2>暂无匹配的职位</h2>
-          <p>换个筛选条件试试？</p>
+          <h2>No Matched Jobs</h2>
+          <p>Try different filters?</p>
         </div>`;
       return;
     }
@@ -743,12 +743,12 @@ async function loadJobs() {
     groups.forEach(([dateStr, jobs]) => {
       const hdr = document.createElement('div');
       hdr.className = 'date-group-header';
-      hdr.innerHTML = `<span>${formatGroupDate(dateStr)}</span><span class="dg-count">${jobs.length} 个岗位</span>`;
+      hdr.innerHTML = `<span>${formatGroupDate(dateStr)}</span><span class="dg-count">${jobs.length} jobs</span>`;
       grid.appendChild(hdr);
       jobs.forEach(job => grid.appendChild(renderCard(job)));
     });
   } catch (err) {
-    grid.innerHTML = `<div class="empty"><h2>加载失败</h2><p>${err.message}</p></div>`;
+    grid.innerHTML = `<div class="empty"><h2>Loading Failed</h2><p>${err.message}</p></div>`;
   }
 }
 
@@ -766,11 +766,11 @@ async function updateStatus(select) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({status}),
     });
-    if (!res.ok) throw new Error('请求失败');
-    showToast(`✅ 状态已更新为「${STATUS_LABEL[status]}」`);
+    if (!res.ok) throw new Error('Request failed');
+    showToast(`✅ Status updated to "${STATUS_LABEL[status]}"`);
     loadStats();
   } catch (err) {
-    showToast('❌ 状态更新失败', 'err');
+    showToast('❌ Status update failed', 'err');
   }
 }
 
@@ -786,13 +786,13 @@ async function saveNotes(btn) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({notes}),
     });
-    if (!res.ok) throw new Error('请求失败');
-    btn.textContent = '已保存 ✓';
+    if (!res.ok) throw new Error('Request failed');
+    btn.textContent = 'Saved ✓';
     btn.classList.add('saved');
-    setTimeout(() => { btn.textContent = '保存备注'; btn.classList.remove('saved'); }, 2000);
-    showToast('📝 备注已保存');
+    setTimeout(() => { btn.textContent = 'Save Notes'; btn.classList.remove('saved'); }, 2000);
+    showToast('📝 Notes saved');
   } catch (err) {
-    showToast('❌ 备注保存失败', 'err');
+    showToast('❌ Notes save failed', 'err');
   }
 }
 

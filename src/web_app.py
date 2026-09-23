@@ -31,22 +31,22 @@ app = Flask(
 )
 
 # ─── Status mapping ───────────────────────────────────────────────────────────
-# DB value → Chinese label
+# DB value → English label
 STATUS_MAP = {
-    "pending":    "未投递",
-    "applied":    "已投递",
-    "rejected":   "已拒绝",
-    "interview":  "面试中",
-    "unsuitable": "不符合",
+    "pending":    "Not Applied",
+    "applied":    "Applied",
+    "rejected":   "Rejected",
+    "interview":  "Interview",
+    "unsuitable": "Unsuitable",
 }
 
 # Unmatched jobs user_status mapping (for 6-7 score borderline jobs)
 UNMATCHED_USER_STATUS_MAP = {
-    "":           "未标记",
-    "watchlist":  "可投递",
+    "":           "Unmarked",
+    "watchlist":  "Can Apply",
 }
 
-# Chinese label → DB value (reverse mapping used nowhere yet, kept for clarity)
+# English label → DB value (reverse mapping used nowhere yet, kept for clarity)
 STATUS_REVERSE = {v: k for k, v in STATUS_MAP.items()}
 
 MATCH_THRESHOLD = float(os.getenv("MATCH_THRESHOLD", "7.0"))

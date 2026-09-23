@@ -2,6 +2,16 @@
 
 Automatically scrapes job listings from Indeed and LinkedIn, uses AI to score each match, and notifies you daily.
 
+### Two-pipeline workflow
+
+| Pipeline | Script | When to run | What it does |
+|---|---|---|---|
+| **Full scrape** | `run_task.sh` | ~6 PM daily | Indeed + LinkedIn (last 24 h), all keywords, AI matching |
+| **Quick scrape** | `run_quick.sh` | ~11 AM daily | LinkedIn only (last 12 h), pre-built OR query, AI matching |
+
+Run the full scrape every evening so the database is refreshed.  
+Run the quick scrape every morning before your application session to capture the freshest listings.
+
 ## Features
 
 - **Multi-platform scraping** – Indeed and LinkedIn, runs sequentially
@@ -18,20 +28,22 @@ Automatically scrapes job listings from Indeed and LinkedIn, uses AI to score ea
 ```
 job_scraper/
 ├── src/
-│   ├── ai_matcher.py          # AI matching engine
-│   ├── config.py              # Central configuration
-│   ├── db_mongo.py            # MongoDB operations
-│   ├── indeed_scraper.py      # Indeed scraper
-│   ├── linkedin_scraper.py    # LinkedIn scraper
-│   ├── scraper_utils.py       # Shared utilities
-│   └── view_jobs.py           # View and query results
+│   ├── ai_matcher.py              # AI matching engine
+│   ├── config.py                  # Central configuration
+│   ├── db_mongo.py                # MongoDB operations
+│   ├── indeed_scraper.py          # Indeed scraper (24-hour window)
+│   ├── linkedin_scraper.py        # LinkedIn scraper (24-hour window, keyword loop)
+│   ├── linkedin_quick_scraper.py  # LinkedIn quick scraper (12-hour window, direct URL)
+│   ├── scraper_utils.py           # Shared utilities
+│   └── view_jobs.py               # View and query results
 ├── docs/
-│   ├── user_profile.md        # Your resume — required for AI
-│   └── matching_criteria.md   # Your job criteria — required for AI
-├── logs/                      # Log output directory
-├── run_task.sh                # Main pipeline script
-├── com.user.job_scraper.plist # LaunchD config (daily schedule)
-└── .env                       # Environment variables (not in git)
+│   ├── user_profile.md            # Your resume — required for AI
+│   └── matching_criteria.md       # Your job criteria — required for AI
+├── logs/                          # Log output directory
+├── run_task.sh                    # Full pipeline (6 PM — Indeed + LinkedIn 24 h)
+├── run_quick.sh                   # Quick pipeline (11 AM — LinkedIn 12 h only)
+├── com.user.job_scraper.plist     # LaunchD config (daily schedule)
+└── .env                           # Environment variables (not in git)
 ```
 
 ---
@@ -70,6 +82,9 @@ python3 src/indeed_scraper.py -k "frontend" -p 1
 python3 src/linkedin_scraper.py -k "frontend" -p 1
 python3 src/ai_matcher.py -l 3
 
+# Test quick scraper (1 page, 5 jobs)
+python3 src/linkedin_quick_scraper.py -p 1 -j 5
+
 # View results
 python3 src/view_jobs.py
 ```
@@ -78,44 +93,89 @@ python3 src/view_jobs.py
 
 ## Daily Automation (macOS LaunchD)
 
-### Enable
+### Full pipeline — 6 PM daily
 
 ```bash
 cp com.user.job_scraper.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.user.job_scraper.plist
 ```
 
-Runs every day at **8:00 AM**. A desktop notification pops up when done.
+Runs every day at **6:00 PM**. A desktop notification pops up when done.
+
+### Quick pipeline — 11 AM daily
+
+Create `com.user.job_quick_scraper.plist` alongside the existing one:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.user.job_quick_scraper</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/carrienon/Desktop/code-project/job_scraper/run_quick.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>11</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/carrienon/Desktop/code-project/job_scraper/logs/launchd_quick_stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/carrienon/Desktop/code-project/job_scraper/logs/launchd_quick_stderr.log</string>
+</dict>
+</plist>
+```
+
+```bash
+cp com.user.job_quick_scraper.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.user.job_quick_scraper.plist
+```
 
 ### Change the schedule
 
-Edit `com.user.job_scraper.plist`:
+Edit the relevant `.plist` file:
 
 ```xml
 <key>Hour</key>
-<integer>8</integer>   <!-- 0–23 -->
+<integer>18</integer>  <!-- 18 = 6 PM (full pipeline) -->
 <key>Minute</key>
-<integer>0</integer>   <!-- 0–59 -->
+<integer>0</integer>
 ```
 
 Then reload:
 
 ```bash
+# Full pipeline
 launchctl unload ~/Library/LaunchAgents/com.user.job_scraper.plist
-launchctl load ~/Library/LaunchAgents/com.user.job_scraper.plist
+launchctl load  ~/Library/LaunchAgents/com.user.job_scraper.plist
+
+# Quick pipeline
+launchctl unload ~/Library/LaunchAgents/com.user.job_quick_scraper.plist
+launchctl load  ~/Library/LaunchAgents/com.user.job_quick_scraper.plist
 ```
 
 ### Common commands
 
 ```bash
 # Run immediately
-launchctl start com.user.job_scraper
+launchctl start com.user.job_scraper        # full pipeline
+launchctl start com.user.job_quick_scraper  # quick pipeline
 
 # Pause automation
 launchctl unload ~/Library/LaunchAgents/com.user.job_scraper.plist
+launchctl unload ~/Library/LaunchAgents/com.user.job_quick_scraper.plist
 
 # Resume automation
 launchctl load ~/Library/LaunchAgents/com.user.job_scraper.plist
+launchctl load ~/Library/LaunchAgents/com.user.job_quick_scraper.plist
 
 # Check status
 launchctl list | grep job_scraper
@@ -138,22 +198,47 @@ sudo pmset -c sleep 1 displaysleep 10
 
 ---
 
-## Running the Pipeline Manually
+## Running the Pipelines Manually
+
+### Full pipeline (~6 PM — 24-hour window)
 
 ```bash
- caffeinate -i ./run_task.sh
+caffeinate -i ./run_task.sh
 ```
 
 Execution order:
 
 1. Launch Chrome (remote debug mode)
-2. Indeed scraper — scrapes new jobs
-3. LinkedIn scraper — scrapes new jobs
+2. Indeed scraper — scrapes new jobs (last 24 hours)
+3. LinkedIn scraper — scrapes new jobs (last 24 hours, iterates keywords)
 4. AI matcher — analyzes all unprocessed jobs
 5. Desktop notification — shows counts
 6. Chrome closed
 
 Estimated time: **40–60 minutes** with default settings (7 keywords × 3 pages).
+
+### Quick pipeline (~11 AM — 12-hour window)
+
+```bash
+caffeinate -i ./run_quick.sh
+```
+
+Execution order:
+
+1. Launch Chrome (remote debug mode)
+2. LinkedIn quick scraper — fetches jobs posted in the **last 12 hours** using a single pre-built OR search URL (Full Stack Engineer / Frontend Developer / Product Engineer / Generative AI Engineer)
+3. AI matcher — analyzes all unprocessed jobs
+4. Desktop notification — shows counts
+5. Chrome closed
+
+Estimated time: **10–20 minutes** (3 pages, up to 30 jobs/page).
+
+### Recommended daily schedule
+
+| Time | Command | Purpose |
+|------|---------|---------|
+| **~6 PM** | `caffeinate -i ./run_task.sh` | Refresh DB with all new jobs from the past 24 hours |
+| **~11 AM** | `caffeinate -i ./run_quick.sh` | Catch jobs posted overnight before applying |
 
 ---
 
@@ -194,14 +279,20 @@ Raise it (e.g. `8.0`) for fewer, higher-quality results. Lower it (e.g. `6.0`) t
 
 ### Scrapers
 
-| Option | Short | Default |
-|--------|-------|---------|
-| `--keywords` | `-k` | `DEFAULT_KEYWORDS` |
-| `--max-pages` | `-p` | `3` |
+| Option | Short | Default | Applies to |
+|--------|-------|---------|-----------|
+| `--keywords` | `-k` | `DEFAULT_KEYWORDS` | `indeed_scraper`, `linkedin_scraper` |
+| `--max-pages` | `-p` | `3` | all scrapers |
+| `--max-jobs` | `-j` | `30` | `linkedin_quick_scraper` |
 
 ```bash
 python3 src/indeed_scraper.py -k "react developer" -p 2
 python3 src/linkedin_scraper.py -k "frontend" "full stack" -p 3
+
+# Quick scraper — no keywords; uses the pre-built 12-hour URL
+python3 src/linkedin_quick_scraper.py              # 3 pages, 30 jobs/page
+python3 src/linkedin_quick_scraper.py -p 2         # 2 pages
+python3 src/linkedin_quick_scraper.py -p 3 -j 20   # 3 pages, 20 jobs each
 ```
 
 ### AI Matcher
@@ -288,11 +379,13 @@ python3 src/view_jobs.py --min-score 8.0   # high scores only
 ## Logs
 
 ```bash
-tail -f logs/main.log               # pipeline summary
-tail -f logs/indeed_YYYYMMDD.log    # Indeed detail
-tail -f logs/linkedin_YYYYMMDD.log  # LinkedIn detail
-tail -f logs/matcher_YYYYMMDD.log   # AI matcher detail
-tail -f logs/launchd_stderr.log     # LaunchD errors
+tail -f logs/main.log                       # pipeline summary (both pipelines)
+tail -f logs/indeed_YYYYMMDD.log            # Indeed detail
+tail -f logs/linkedin_YYYYMMDD.log          # LinkedIn full-scrape detail
+tail -f logs/linkedin_quick_YYYYMMDD.log    # LinkedIn quick-scrape detail
+tail -f logs/matcher_YYYYMMDD.log           # AI matcher (full pipeline)
+tail -f logs/matcher_quick_YYYYMMDD.log     # AI matcher (quick pipeline)
+tail -f logs/launchd_stderr.log             # LaunchD errors
 
 # Clean up logs older than 7 days
 find logs/ -name "*.log" -mtime +7 -delete

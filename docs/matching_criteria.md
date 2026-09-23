@@ -150,8 +150,8 @@ Base scoring uses **only** skills explicitly marked as "required", "mandatory", 
 **Boost match score** if JD mentions:
 - **E-commerce**: Online shopping, retail, marketplace, product catalog
 - **SaaS**: B2B platforms, subscription services
-- **Consumer-facing (C端)**: User applications, customer portals
-- **Admin systems (B端)**: Management dashboards, internal tools
+- **Consumer-facing (C-side)**: User applications, customer portals
+- **Admin systems (B-side)**: Management dashboards, internal tools
 - **Food compliance/regulatory**: Food industry, compliance systems
 
 ### Relevant Project Experience:

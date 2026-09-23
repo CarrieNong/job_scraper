@@ -139,10 +139,10 @@ def get_new_jobs(limit=None, source=None):
     db = get_db()
     collection = db[COLLECTION_NAME]
     
-    # 只查询status="new" 且 没有matched_at字段的职位（未进行AI匹配）
+    # Only query jobs with status="new" and without matched_at field (not yet AI matched)
     filter_dict = {
         "status": "new",
-        "matched_at": {"$exists": False}  # 新增：排除已匹配的
+        "matched_at": {"$exists": False}  # New: exclude already matched jobs
     }
     if source:
         filter_dict["source"] = source

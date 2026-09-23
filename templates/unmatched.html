@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>未匹配岗位 · Job Tracker</title>
+  <title>Unmatched Jobs · Job Tracker</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -302,48 +302,48 @@
 <body>
 
 <header>
-  <a class="logo" href="/unmatched">💼 未匹配岗位</a>
+  <a class="logo" href="/unmatched">💼 Unmatched Jobs</a>
   <div class="header-actions">
-    <a class="nav-btn" href="/">← 返回匹配岗位</a>
-    <button class="btn-save" onclick="loadJobs()">↻ 刷新</button>
+    <a class="nav-btn" href="/">← Back to Matched Jobs</a>
+    <button class="btn-save" onclick="loadJobs()">↻ Refresh</button>
   </div>
 </header>
 
 <div class="toolbar">
-  <input type="search" id="searchInput" placeholder="🔍 搜索职位 / 公司 / 淘汰原因…" oninput="debounceLoad()" />
+  <input type="search" id="searchInput" placeholder="🔍 Search jobs / company / rejection reason…" oninput="debounceLoad()" />
   <select id="sourceFilter" onchange="goPage(1)">
-    <option value="all">全部来源</option>
+    <option value="all">All Sources</option>
     <option value="linkedin">LinkedIn</option>
     <option value="indeed">Indeed</option>
   </select>
   <div class="watchlist-chip" id="watchlistChip" onclick="toggleWatchlistFilter()">
     <span class="watchlist-dot"></span>
-    <span>⭐ 可投递</span>
+    <span>⭐ Can Apply</span>
     <b class="watchlist-count" id="watchlistCount"></b>
   </div>
   <select id="timePreset" onchange="onTimePresetChange()">
-    <option value="all">全部时间</option>
-    <option value="today">今天</option>
-    <option value="3">近 3 天</option>
-    <option value="7">近 7 天</option>
-    <option value="30">近 30 天</option>
-    <option value="custom">自定义时间</option>
+    <option value="all">All Time</option>
+    <option value="today">Today</option>
+    <option value="3">Last 3 Days</option>
+    <option value="7">Last 7 Days</option>
+    <option value="30">Last 30 Days</option>
+    <option value="custom">Custom Time</option>
   </select>
   <div class="filter-group hidden-filter" id="customDateGroup">
     <input type="date" id="dateFrom" />
-    <span>至</span>
+    <span>to</span>
     <input type="date" id="dateTo" />
   </div>
   <select id="scorePreset" onchange="onScorePresetChange()">
-    <option value="all">全部分数</option>
-    <option value="0-3">0–3 硬性淘汰</option>
-    <option value="4-6">4–6 弱匹配</option>
-    <option value="custom">自定义分数</option>
+    <option value="all">All Scores</option>
+    <option value="0-3">0–3 Hard Reject</option>
+    <option value="4-6">4–6 Weak Match</option>
+    <option value="custom">Custom Score</option>
   </select>
   <div class="filter-group hidden-filter" id="customScoreGroup">
-    <input type="number" id="scoreMin" min="0" max="6.9" step="0.5" placeholder="最低" onchange="goPage(1)" />
+    <input type="number" id="scoreMin" min="0" max="6.9" step="0.5" placeholder="Min" onchange="goPage(1)" />
     <span>–</span>
-    <input type="number" id="scoreMax" min="0" max="6.9" step="0.5" placeholder="最高" onchange="goPage(1)" />
+    <input type="number" id="scoreMax" min="0" max="6.9" step="0.5" placeholder="Max" onchange="goPage(1)" />
   </div>
   <span class="count-label" id="countLabel"></span>
 </div>
@@ -362,7 +362,7 @@ let currentPage = 1;
 let debounceTimer = null;
 let dateDebounceTimer = null;
 const PAGE_SIZE = 20;
-let watchlistOnly = false;  // 只看「可投递」筛选状态
+let watchlistOnly = false;  // Filter to show only "Can Apply" jobs
 
 /* ── Toast ───────────────────────────────────────────────────────── */
 function showToast(msg, type = 'ok') {
@@ -393,14 +393,14 @@ async function updateUnmatchedStatus(select) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ user_status: userStatus }),
     });
-    if (!res.ok) throw new Error('请求失败');
-    const label = userStatus === 'watchlist' ? '⭐ 已标记为「可投递」' : '✅ 已取消标记';
+    if (!res.ok) throw new Error('Request failed');
+    const label = userStatus === 'watchlist' ? '⭐ Marked as "Can Apply"' : '✅ Mark removed';
     showToast(label);
     // If in watchlist-only mode, reload to reflect removal
     if (watchlistOnly && userStatus !== 'watchlist') loadJobs();
     else loadWatchlistCount();
   } catch (err) {
-    showToast('❌ 标记失败', 'err');
+    showToast('❌ Mark failed', 'err');
   }
 }
 
@@ -442,19 +442,19 @@ function onTimePresetChange() {
 
 /* ── Group jobs by date ──────────────────────────────────────────── */
 function formatGroupDate(dateStr) {
-  if (!dateStr) return '未知日期';
+  if (!dateStr) return 'Unknown Date';
   const today = formatDate(new Date());
   const yd = new Date(); yd.setDate(yd.getDate() - 1);
   const yesterday = formatDate(yd);
-  if (dateStr === today) return `今天 · ${dateStr}`;
-  if (dateStr === yesterday) return `昨天 · ${dateStr}`;
+  if (dateStr === today) return `Today · ${dateStr}`;
+  if (dateStr === yesterday) return `Yesterday · ${dateStr}`;
   return dateStr;
 }
 
 function groupJobsByDate(jobs) {
   const groups = new Map();
   jobs.forEach(job => {
-    const dateStr = (job.matched_at || '').split(' ')[0] || '未知日期';
+    const dateStr = (job.matched_at || '').split(' ')[0] || 'Unknown Date';
     if (!groups.has(dateStr)) groups.set(dateStr, []);
     groups.get(dateStr).push(job);
   });
@@ -524,7 +524,7 @@ function renderBreakdown(title, section) {
   ].join('');
   return `
     <details class="breakdown">
-      <summary><span>${title}</span><span class="bd-count">${matched.length}/${total} 匹配</span></summary>
+      <summary><span>${title}</span><span class="bd-count">${matched.length}/${total} matched</span></summary>
       <ul class="bd-list">${items}</ul>
     </details>`;
 }
@@ -555,7 +555,7 @@ function renderCard(job) {
   card.innerHTML = `
     <div class="card-header">
       <div class="card-title-block">
-        <div class="card-title">${escHtml(job.title || '（无标题）')}</div>
+        <div class="card-title">${escHtml(job.title || '(No Title)')}</div>
         <div class="card-company">${escHtml(job.company || '')}${job.location ? ' · ' + escHtml(job.location) : ''}</div>
       </div>
       <div class="score-badge ${scoreCls(score)}">${score.toFixed(1)}</div>
@@ -567,16 +567,16 @@ function renderCard(job) {
       ${job.recommendation ? `<span class="meta-pill">${escHtml(job.recommendation)}</span>` : ''}
     </div>
 
-    ${reason ? `<div class="reason-box"><strong>淘汰原因</strong>${escHtml(reason)}</div>` : ''}
+    ${reason ? `<div class="reason-box"><strong>Rejection Reason</strong>${escHtml(reason)}</div>` : ''}
     ${summary && summary !== reason ? `<div class="card-summary">${escHtml(summary)}</div>` : ''}
-    ${!hasAnalysis ? `<div class="card-summary">此次匹配尚未保存详细原因。重新跑 matcher 后会写入完整分析。</div>` : ''}
+    ${!hasAnalysis ? `<div class="card-summary">This match has not saved detailed analysis yet. Run matcher again to write full analysis.</div>` : ''}
 
     ${renderBreakdown("What you'll do", job.what_youll_do)}
     ${renderBreakdown("What they're looking for", job.what_theyre_looking_for)}
-    ${renderList('缺失要求', job.missing_requirements, 'bd-no')}
-    ${renderList('风险点', job.red_flags, 'bd-no')}
+    ${renderList('Missing Requirements', job.missing_requirements, 'bd-no')}
+    ${renderList('Red Flags', job.red_flags, 'bd-no')}
 
-    <a class="btn-apply" href="${escHtml(job.link || '#')}" target="_blank" rel="noopener">查看原帖</a>
+    <a class="btn-apply" href="${escHtml(job.link || '#')}" target="_blank" rel="noopener">View Original</a>
 
     ${score >= 6.0 ? renderUnmatchedStatusSelect(job) : ''}
   `;
@@ -591,8 +591,8 @@ function renderUnmatchedStatusSelect(job) {
       <select class="status-select${userStatus === 'watchlist' ? ' s-watchlist' : ''}"
               data-id="${job._id}"
               onchange="updateUnmatchedStatus(this)">
-        <option value=""    ${userStatus === ''          ? 'selected' : ''}>📋 未标记</option>
-        <option value="watchlist" ${userStatus === 'watchlist' ? 'selected' : ''}>⭐ 可投递</option>
+        <option value=""    ${userStatus === ''          ? 'selected' : ''}>📋 Unmarked</option>
+        <option value="watchlist" ${userStatus === 'watchlist' ? 'selected' : ''}>⭐ Can Apply</option>
       </select>
     </div>`;
 }
@@ -614,12 +614,12 @@ function renderPager(data) {
   }
 
   pager.innerHTML = `
-    <button ${page <= 1 ? 'disabled' : ''} onclick="goPage(${page - 1})">上一页</button>
+    <button ${page <= 1 ? 'disabled' : ''} onclick="goPage(${page - 1})">Previous</button>
     ${start > 1 ? `<button class="page-btn" onclick="goPage(1)">1</button><span class="page-info">…</span>` : ''}
     ${buttons.join('')}
     ${end < pages ? `<span class="page-info">…</span><button class="page-btn" onclick="goPage(${pages})">${pages}</button>` : ''}
-    <button ${page >= pages ? 'disabled' : ''} onclick="goPage(${page + 1})">下一页</button>
-    <span class="page-info">第 ${page} / ${pages} 页</span>
+    <button ${page >= pages ? 'disabled' : ''} onclick="goPage(${page + 1})">Next</button>
+    <span class="page-info">Page ${page} / ${pages}</span>
   `;
 }
 
@@ -650,13 +650,13 @@ async function loadJobs() {
 
     grid.innerHTML = '';
     document.getElementById('countLabel').textContent =
-      `共 ${data.total} 条 · 从新到旧 · 阈值 ${Number(data.threshold || 7).toFixed(1)}`;
+      `Total ${data.total} · Newest First · Threshold ${Number(data.threshold || 7).toFixed(1)}`;
 
     if (!data.jobs.length) {
       grid.innerHTML = `
         <div class="empty">
-          <h2>暂无未匹配岗位</h2>
-          <p>换个时间或分数条件，或等下一轮 AI 匹配后再看。</p>
+          <h2>No Unmatched Jobs</h2>
+          <p>Try a different time or score filter, or wait for the next AI matching round.</p>
         </div>`;
       renderPager(data);
       return;
@@ -667,13 +667,13 @@ async function loadJobs() {
     groups.forEach(([dateStr, jobs]) => {
       const hdr = document.createElement('div');
       hdr.className = 'date-group-header';
-      hdr.innerHTML = `<span>${formatGroupDate(dateStr)}</span><span class="dg-count">${jobs.length} 个岗位</span>`;
+      hdr.innerHTML = `<span>${formatGroupDate(dateStr)}</span><span class="dg-count">${jobs.length} jobs</span>`;
       grid.appendChild(hdr);
       jobs.forEach(job => grid.appendChild(renderCard(job)));
     });
     renderPager(data);
   } catch (err) {
-    grid.innerHTML = `<div class="empty"><h2>加载失败</h2><p>${escHtml(err.message)}</p></div>`;
+    grid.innerHTML = `<div class="empty"><h2>Loading Failed</h2><p>${escHtml(err.message)}</p></div>`;
     document.getElementById('pager').innerHTML = '';
   }
 }

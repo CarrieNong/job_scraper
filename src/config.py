@@ -101,8 +101,35 @@ LINKEDIN_CONFIG = {
     "base_url": "https://www.linkedin.com/jobs/search/",
     "geo_id": "101282230",  # Germany
     "time_filter": "r86400",  # Last 24 hours
-    
+
     # Selectors
+    "selectors": {
+        "job_card": ".scaffold-layout__list-item",
+        "job_link": "a.job-card-container__link",
+    }
+}
+
+
+# ===== LinkedIn Quick Search Configuration (12-hour window) =====
+# Used by the morning quick-scrape run (11 AM) to capture jobs posted
+# in the last 12 hours — complements the full 24-hour evening scrape.
+LINKEDIN_QUICK_CONFIG = {
+    "source": "linkedin",
+    # Direct search URL — keywords encode an OR query across all target roles.
+    # f_TPR=r43200 → posted within the last 43 200 seconds (12 hours).
+    "url": (
+        "https://www.linkedin.com/jobs/search-results/"
+        "?keywords=full-time%20Full%20Stack%20Engineer%20or%20Frontend%20Developer"
+        "%20or%20Product%20Engineer%20or%20Generative%20AI%20Engineer"
+        "%2C%20on-site%20or%20hybrid%20or%20remote"
+        "&geoId=101282230"
+        "&f_TPR=r43200"
+        "&origin=JOB_SEARCH_PAGE_JOB_FILTER"
+        "&refresh=true"
+    ),
+    "time_window_hours": 12,
+
+    # Selectors (same as standard LinkedIn)
     "selectors": {
         "job_card": ".scaffold-layout__list-item",
         "job_link": "a.job-card-container__link",
