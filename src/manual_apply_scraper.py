@@ -114,10 +114,11 @@ def scrape_linkedin_job(page, url: str) -> Optional[dict]:
         print(f"  ⚠️  Navigation error: {e}")
         return None
 
-    # Wait for the detail panel — any of the known description containers
+    # Wait for the detail panel — new SDUI layout first, then classic fallbacks
     try:
         page.wait_for_selector(
-            ".job-details-jobs-unified-top-card__tertiary-description-container,"
+            '[data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.SemanticJobDetails"],'
+            " .job-details-jobs-unified-top-card__tertiary-description-container,"
             " .jobs-box__html-content,"
             " [id*='JobDetails_AboutTheJob']",
             timeout=15000,
@@ -138,26 +139,45 @@ def scrape_linkedin_job(page, url: str) -> Optional[dict]:
         page.locator(".job-details-jobs-unified-top-card__tertiary-description-container")
     )
 
-    # Description: lazy-column first (new LinkedIn layout), then classic fallbacks.
-    # Always use inner_html + strip_html so no HTML/CSS leaks into the stored text.
+    # Description: new SDUI layout first (SemanticJobDetails > lazy-column),
+    # then classic fallbacks. Use inner_text() for the SDUI path so we get clean
+    # visible text directly; fall back to inner_html + strip_html for older layouts.
     description = ""
-    for sel in [
-        '[data-testid="lazy-column"]',               # new LinkedIn lazy-load column
-        f"#JobDetails_AboutTheJob_jobs_{job_id}",    # exact ID with job_id
-        "[id*='JobDetails_AboutTheJob']",             # partial ID match
-        ".jobs-box__html-content",                    # older layout
-    ]:
-        try:
-            loc = page.locator(sel).first
-            if loc.count() > 0:
-                desc_html = loc.inner_html(timeout=5000) or ""
-                if desc_html:
-                    description = strip_html(desc_html)
-                    if description:
-                        print(f"  🔍 Description found via: {sel}")
-                        break
-        except Exception:
-            pass
+
+    # ── Primary: new LinkedIn SDUI layout ────────────────────────────────────
+    try:
+        screen_loc = page.locator(
+            '[data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.SemanticJobDetails"]'
+        )
+        if screen_loc.count() > 0:
+            lazy_col = screen_loc.locator('[data-testid="lazy-column"]').first
+            if lazy_col.count() > 0:
+                desc_text = lazy_col.inner_text(timeout=8000) or ""
+                desc_text = desc_text.strip()
+                if desc_text:
+                    description = desc_text
+                    print('  🔍 Description found via: SemanticJobDetails > [data-testid="lazy-column"]')
+    except Exception:
+        pass
+
+    # ── Fallbacks: classic / older LinkedIn layouts ───────────────────────────
+    if not description:
+        for sel in [
+            f"#JobDetails_AboutTheJob_jobs_{job_id}",    # exact ID with job_id
+            "[id*='JobDetails_AboutTheJob']",             # partial ID match
+            ".jobs-box__html-content",                    # older layout
+        ]:
+            try:
+                loc = page.locator(sel).first
+                if loc.count() > 0:
+                    desc_html = loc.inner_html(timeout=5000) or ""
+                    if desc_html:
+                        description = strip_html(desc_html)
+                        if description:
+                            print(f"  🔍 Description found via: {sel}")
+                            break
+            except Exception:
+                pass
 
     return {
         "title": title,
