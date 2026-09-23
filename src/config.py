@@ -76,6 +76,8 @@ TITLE_EXCLUDE_KEYWORDS = [
     r"\bSystems\s+Engineer\b",
     r"\bProcess\s+Validation\s+Engineer\b",
     r"\bSafety\s+Engineer\b",
+    r"\bUI\b",             # UI Designer / UI Engineer
+    r"\bUX\b",             # UX Designer / UX Researcher
 ]
 
 
