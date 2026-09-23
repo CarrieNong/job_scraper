@@ -191,6 +191,31 @@
     The scraper will open each URL, run AI matching, and save everything to your tracker with status <strong>Applied</strong> — regardless of score.
   </p>
 
+  <!-- Date picker -->
+  <div style="margin-bottom:14px; display:flex; align-items:center; gap:12px;">
+    <label for="appliedDate" style="font-size:.88rem; color:var(--muted); white-space:nowrap;">
+      📅 Applied on
+    </label>
+    <input
+      type="date"
+      id="appliedDate"
+      style="
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        padding: 7px 12px;
+        font-size: .88rem;
+        outline: none;
+        cursor: pointer;
+        transition: border-color .15s;
+      "
+      onfocus="this.style.borderColor='var(--accent)'"
+      onblur="this.style.borderColor='var(--border)'"
+    />
+    <span style="font-size:.8rem; color:var(--muted);">（留空则默认今天）</span>
+  </div>
+
   <textarea
     id="urlBox"
     class="url-box"
@@ -243,6 +268,15 @@ function colorLine(line) {
 }
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+// Set today's date as default on page load
+document.addEventListener('DOMContentLoaded', () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const dd   = String(d.getDate()).padStart(2, '0');
+  document.getElementById('appliedDate').value = `${yyyy}-${mm}-${dd}`;
+});
+
 async function submitUrls() {
   const raw = document.getElementById('urlBox').value.trim();
   if (!raw) { alert('Please enter at least one URL.'); return; }
@@ -252,6 +286,8 @@ async function submitUrls() {
     .filter(u => u && !u.startsWith('#'));
 
   if (urls.length === 0) { alert('No valid URLs found.'); return; }
+
+  const appliedDate = document.getElementById('appliedDate').value || '';
 
   setBanner('running', `<div class="spinner"></div> Scraping ${urls.length} URL(s) in the background…`);
   document.getElementById('submitBtn').disabled = true;
@@ -263,7 +299,7 @@ async function submitUrls() {
     const res = await fetch('/api/manual-apply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urls }),
+      body: JSON.stringify({ urls, applied_date: appliedDate }),
     });
     const data = await res.json();
     if (!res.ok) {

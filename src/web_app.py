@@ -361,7 +361,7 @@ def manual_apply_page():
 @app.route("/api/manual-apply", methods=["POST"])
 def api_manual_apply():
     """
-    Accepts a JSON body: {"urls": ["https://...", ...]}
+    Accepts a JSON body: {"urls": [...], "applied_date": "YYYY-MM-DD"}
     Runs the manual-apply scraper in a background thread.
     Returns immediately with {"status": "started"} or an error.
     """
@@ -372,6 +372,15 @@ def api_manual_apply():
     urls = [u.strip() for u in urls if isinstance(u, str) and u.strip()]
     if not urls:
         return jsonify({"error": "No valid URLs provided"}), 400
+
+    # Parse optional applied_date
+    applied_date = None
+    raw_date = data.get("applied_date", "").strip()
+    if raw_date:
+        try:
+            applied_date = datetime.strptime(raw_date, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"error": f"Invalid applied_date format, expected YYYY-MM-DD"}), 400
 
     if not _manual_apply_lock.acquire(blocking=False):
         return jsonify({"error": "A manual-apply run is already in progress. Please wait."}), 429
@@ -397,7 +406,7 @@ def api_manual_apply():
 
             builtins.print = _capture_print
             try:
-                _process_urls(urls)
+                _process_urls(urls, applied_date=applied_date)
                 # Count results from log
                 for line in _manual_apply_state["log"]:
                     if "✅ Saved to matched_jobs" in line:
