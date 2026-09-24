@@ -35,7 +35,6 @@ TITLE_EXCLUDE_KEYWORDS = [
     r"\bCloud\b",
     r"\bLead\b",
     r"\bStaff\b",
-    r"\bFounding\b",
     r"\bDevOps\b",
     r"C#",                 # C# / C++/C#
     r"\.NET",              # .NET

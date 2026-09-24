@@ -144,6 +144,29 @@
     }
     .count-label { color: var(--muted); font-size: .85rem; margin-left: auto; }
 
+    /* ── Layout toggle ────────────────────────────────────────────── */
+    .layout-toggle {
+      display: inline-flex;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .layout-toggle button {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      padding: 7px 12px;
+      font-size: .78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .layout-toggle button + button { border-left: 1px solid var(--border); }
+    .layout-toggle button.active { background: var(--surface2); color: var(--accent); }
+    .layout-toggle button:hover:not(.active) { color: var(--text); }
+
     /* Date filter inputs */
     .toolbar input[type="date"],
     .toolbar input[type="number"] {
@@ -200,6 +223,12 @@
       gap: 16px;
       padding: 20px 24px 40px;
     }
+    .job-grid.layout-compact {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 12px 24px 40px;
+    }
 
     /* ── Job card ─────────────────────────────────────────────────── */
     .card {
@@ -215,6 +244,92 @@
       border-color: var(--accent);
       box-shadow: 0 0 0 1px var(--accent)22, 0 8px 32px #0008;
       transform: translateY(-2px);
+    }
+    .card-body { display: flex; flex-direction: column; gap: 14px; }
+
+    /* Compact row (hidden in cards layout) */
+    .card-row { display: none; }
+
+    /* ── Compact layout overrides ─────────────────────────────────── */
+    .job-grid.layout-compact .card {
+      padding: 0;
+      gap: 0;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .job-grid.layout-compact .card:hover {
+      transform: none;
+      box-shadow: none;
+    }
+    .job-grid.layout-compact .card.expanded {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent)22;
+    }
+    .job-grid.layout-compact .card-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      cursor: pointer;
+      user-select: none;
+      min-height: 52px;
+    }
+    .job-grid.layout-compact .card-row:hover { background: var(--surface2); }
+    .job-grid.layout-compact .card-body { display: none; padding: 0 16px 16px; gap: 12px; }
+    .job-grid.layout-compact .card.expanded .card-body { display: flex; }
+    .job-grid.layout-compact .card.expanded .row-chevron { transform: rotate(90deg); }
+
+    .row-chevron {
+      flex-shrink: 0;
+      color: var(--muted);
+      font-size: .7rem;
+      width: 12px;
+      transition: transform .15s;
+    }
+    .row-main { flex: 1; min-width: 0; }
+    .row-title {
+      font-size: .9rem; font-weight: 600; line-height: 1.3;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .row-company {
+      font-size: .72rem; color: var(--muted); margin-top: 1px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .row-meta {
+      display: flex; align-items: center; gap: 8px;
+      flex-shrink: 0;
+    }
+    .row-loc {
+      font-size: .75rem; color: var(--muted);
+      max-width: 140px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .status-pill {
+      flex-shrink: 0;
+      font-size: .7rem; font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid;
+      white-space: nowrap;
+    }
+    .status-pill.s-pending    { color: var(--pending);    border-color: var(--pending)55;    background: #3b82f618; }
+    .status-pill.s-applied    { color: var(--applied);    border-color: var(--applied)55;    background: #22c55e18; }
+    .status-pill.s-rejected   { color: var(--rejected);   border-color: var(--rejected)55;   background: #ef444418; }
+    .status-pill.s-interview  { color: var(--interview);  border-color: var(--interview)55;  background: #f59e0b18; }
+    .status-pill.s-unsuitable { color: var(--unsuitable); border-color: var(--unsuitable)55; background: #8b5cf618; }
+    .status-pill.s-closed     { color: var(--closed);     border-color: var(--closed)55;     background: #71717a18; }
+
+    .job-grid.layout-compact .score-badge {
+      width: 34px; height: 34px; font-size: .78rem; border-radius: 8px;
+    }
+    .job-grid.layout-compact .date-group-header {
+      padding: 10px 2px 4px;
+      margin-top: 6px;
+    }
+
+    @media (max-width: 720px) {
+      .job-grid.layout-compact .row-loc { display: none; }
+      .job-grid.layout-compact .row-meta .meta-pill { display: none; }
     }
 
     .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
@@ -558,6 +673,10 @@
     <span>to</span>
     <input type="date" id="dateTo" />
   </div>
+  <div class="layout-toggle" id="layoutToggle">
+    <button type="button" data-layout="cards" onclick="setLayout('cards')" title="Card layout">▦ Cards</button>
+    <button type="button" data-layout="compact" onclick="setLayout('compact')" title="Compact list">☰ List</button>
+  </div>
   <span class="count-label" id="countLabel"></span>
 </div>
 
@@ -575,6 +694,7 @@ let currentStatusFilter = 'all';
 let debounceTimer = null;
 let dateDebounceTimer = null;
 const collapsedGroups = new Set(); // tracks which date groups are collapsed
+let currentLayout = localStorage.getItem('jobLayout') || 'compact';
 
 const STATUS_LABEL = {
   pending:    'Not Applied',
@@ -584,6 +704,28 @@ const STATUS_LABEL = {
   unsuitable: 'Unsuitable',
   closed:     'Closed',
 };
+
+/* ── Layout toggle ───────────────────────────────────────────────── */
+function setLayout(mode) {
+  currentLayout = mode;
+  localStorage.setItem('jobLayout', mode);
+  const grid = document.getElementById('jobGrid');
+  grid.classList.toggle('layout-compact', mode === 'compact');
+  grid.classList.toggle('layout-cards', mode === 'cards');
+  document.querySelectorAll('#layoutToggle button').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.layout === mode);
+  });
+  // Collapse all expanded cards when switching to compact
+  if (mode === 'compact') {
+    grid.querySelectorAll('.card.expanded').forEach(c => c.classList.remove('expanded'));
+  }
+}
+
+function toggleCardExpand(rowEl) {
+  if (currentLayout !== 'compact') return;
+  const card = rowEl.closest('.card');
+  if (card) card.classList.toggle('expanded');
+}
 
 /* ── Toast ───────────────────────────────────────────────────────── */
 function showToast(msg, type = 'ok') {
@@ -750,69 +892,85 @@ function renderCard(job) {
   card.id = `card-${job._id}`;
 
   card.innerHTML = `
-    <div class="card-header">
-      <div class="card-title-block" data-id="${job._id}">
-        <!-- View mode -->
-        <div class="info-view">
-          <div class="card-title">
-            <span class="card-title-text">${escHtml(job.title || '(No Title)')}</span>
-            <button class="edit-info-btn" onclick="openEditInfo(this)" title="Edit title / company / location">✏️ Edit</button>
-          </div>
-          <div class="card-company">${escHtml(job.company || '')}${job.location ? ' · ' + escHtml(job.location) : ''}</div>
-        </div>
-        <!-- Edit mode -->
-        <div class="info-edit">
-          <input class="info-input" data-field="title"    value="${escHtml(job.title    || '')}" placeholder="Job Title" />
-          <div class="info-edit-row">
-            <input class="info-input" data-field="company"  value="${escHtml(job.company  || '')}" placeholder="Company" />
-            <input class="info-input" data-field="location" value="${escHtml(job.location || '')}" placeholder="Location" />
-          </div>
-          <div class="info-action-row">
-            <button class="info-save-btn"   onclick="saveJobInfo(this)">✓ Save</button>
-            <button class="info-cancel-btn" onclick="cancelEditInfo(this)">✕ Cancel</button>
-          </div>
-        </div>
+    <div class="card-row" onclick="toggleCardExpand(this)">
+      <span class="row-chevron">▸</span>
+      <div class="row-main">
+        <div class="row-title">${escHtml(job.title || '(No Title)')}</div>
+        <div class="row-company">${escHtml(job.company || '')}</div>
       </div>
-      <div class="score-badge ${scoreCls(job.match_score || 0)}">${score}</div>
+      <div class="row-meta">
+        ${job.location ? `<span class="row-loc" title="${escHtml(job.location)}">📍 ${escHtml(job.location)}</span>` : ''}
+        <span class="meta-pill source-pill">${escHtml(job.source || '')}</span>
+        <span class="status-pill s-${status}" data-status-pill>${STATUS_LABEL[status] || status}</span>
+        <div class="score-badge ${scoreCls(job.match_score || 0)}">${score}</div>
+      </div>
     </div>
 
-    <div class="card-meta">
-      <span class="meta-pill source-pill">${escHtml(job.source || '')}</span>
-      ${job.matched_at ? `<span class="meta-pill">📅 ${job.matched_at}</span>` : ''}
-      ${job.applicants ? `<span class="meta-pill">👥 ${escHtml(job.applicants)}</span>` : ''}
-    </div>
+    <div class="card-body">
+      <div class="card-header">
+        <div class="card-title-block" data-id="${job._id}">
+          <!-- View mode -->
+          <div class="info-view">
+            <div class="card-title">
+              <span class="card-title-text">${escHtml(job.title || '(No Title)')}</span>
+              <button class="edit-info-btn" onclick="openEditInfo(this)" title="Edit title / company / location">✏️ Edit</button>
+            </div>
+            <div class="card-company">${escHtml(job.company || '')}${job.location ? ' · ' + escHtml(job.location) : ''}</div>
+          </div>
+          <!-- Edit mode -->
+          <div class="info-edit">
+            <input class="info-input" data-field="title"    value="${escHtml(job.title    || '')}" placeholder="Job Title" />
+            <div class="info-edit-row">
+              <input class="info-input" data-field="company"  value="${escHtml(job.company  || '')}" placeholder="Company" />
+              <input class="info-input" data-field="location" value="${escHtml(job.location || '')}" placeholder="Location" />
+            </div>
+            <div class="info-action-row">
+              <button class="info-save-btn"   onclick="saveJobInfo(this)">✓ Save</button>
+              <button class="info-cancel-btn" onclick="cancelEditInfo(this)">✕ Cancel</button>
+            </div>
+          </div>
+        </div>
+        <div class="score-badge ${scoreCls(job.match_score || 0)}">${score}</div>
+      </div>
 
-    ${job.summary ? `<div class="card-summary">${escHtml(job.summary)}</div>` : ''}
+      <div class="card-meta">
+        <span class="meta-pill source-pill">${escHtml(job.source || '')}</span>
+        ${job.matched_at ? `<span class="meta-pill">📅 ${job.matched_at}</span>` : ''}
+        ${job.applicants ? `<span class="meta-pill">👥 ${escHtml(job.applicants)}</span>` : ''}
+      </div>
 
-    ${doSection}
-    ${lookingSection}
+      ${job.summary ? `<div class="card-summary">${escHtml(job.summary)}</div>` : ''}
 
-    ${matchReasons ? `<ul style="font-size:.78rem;color:var(--muted);padding-left:16px;line-height:1.6;">${matchReasons}</ul>` : ''}
+      ${doSection}
+      ${lookingSection}
 
-    <a class="btn-apply ${status === 'applied' ? 'btn-applied' : ''}"
-       href="${escHtml(job.link || '#')}" target="_blank" rel="noopener">
-      ${status === 'applied' ? '🔗 View Detail' : '🚀 Apply Now'}
-    </a>
+      ${matchReasons ? `<ul style="font-size:.78rem;color:var(--muted);padding-left:16px;line-height:1.6;">${matchReasons}</ul>` : ''}
 
-    <div class="status-row">
-      <select class="status-select s-${status}" data-id="${job._id}" onchange="updateStatus(this)">
-        <option value="pending"    ${status==='pending'    ? 'selected':''}>📋 Not Applied</option>
-        <option value="applied"    ${status==='applied'    ? 'selected':''}>✅ Applied</option>
-        <option value="interview"  ${status==='interview'  ? 'selected':''}>🤝 Interview</option>
-        <option value="rejected"   ${status==='rejected'   ? 'selected':''}>❌ Rejected</option>
-        <option value="unsuitable" ${status==='unsuitable' ? 'selected':''}>🚫 Unsuitable</option>
-        <option value="closed"     ${status==='closed'     ? 'selected':''}>🔒 Closed</option>
-      </select>
-    </div>
+      <a class="btn-apply ${status === 'applied' ? 'btn-applied' : ''}"
+         href="${escHtml(job.link || '#')}" target="_blank" rel="noopener">
+        ${status === 'applied' ? '🔗 View Detail' : '🚀 Apply Now'}
+      </a>
 
-    <div class="notes-wrap">
-      <textarea
-        class="notes-textarea"
-        data-id="${job._id}"
-        placeholder="Notes: Rejected after interview / Direct rejection / Salary mismatch…"
-        rows="2"
-      >${escHtml(job.notes || '')}</textarea>
-      <button class="btn-save" data-id="${job._id}" onclick="saveNotes(this)">Save Notes</button>
+      <div class="status-row">
+        <select class="status-select s-${status}" data-id="${job._id}" onchange="updateStatus(this)">
+          <option value="pending"    ${status==='pending'    ? 'selected':''}>📋 Not Applied</option>
+          <option value="applied"    ${status==='applied'    ? 'selected':''}>✅ Applied</option>
+          <option value="interview"  ${status==='interview'  ? 'selected':''}>🤝 Interview</option>
+          <option value="rejected"   ${status==='rejected'   ? 'selected':''}>❌ Rejected</option>
+          <option value="unsuitable" ${status==='unsuitable' ? 'selected':''}>🚫 Unsuitable</option>
+          <option value="closed"     ${status==='closed'     ? 'selected':''}>🔒 Closed</option>
+        </select>
+      </div>
+
+      <div class="notes-wrap">
+        <textarea
+          class="notes-textarea"
+          data-id="${job._id}"
+          placeholder="Notes: Rejected after interview / Direct rejection / Salary mismatch…"
+          rows="2"
+        >${escHtml(job.notes || '')}</textarea>
+        <button class="btn-save" data-id="${job._id}" onclick="saveNotes(this)">Save Notes</button>
+      </div>
     </div>
   `;
   return card;
@@ -826,6 +984,8 @@ async function loadJobs() {
   const dates  = currentDateRange();
 
   grid.innerHTML = '<div class="spinner"></div>';
+  grid.classList.toggle('layout-compact', currentLayout === 'compact');
+  grid.classList.toggle('layout-cards', currentLayout === 'cards');
 
   const params = new URLSearchParams();
   if (currentStatusFilter !== 'all') params.set('status', currentStatusFilter);
@@ -839,6 +999,8 @@ async function loadJobs() {
     const data = await res.json();
 
     grid.innerHTML = '';
+    grid.classList.toggle('layout-compact', currentLayout === 'compact');
+    grid.classList.toggle('layout-cards', currentLayout === 'cards');
     document.getElementById('countLabel').textContent = `Total ${data.total}`;
 
     if (!data.jobs.length) {
@@ -888,6 +1050,14 @@ async function updateStatus(select) {
 
   // Update style immediately
   select.className = `status-select s-${status}`;
+
+  // Sync compact-row status pill
+  const card = select.closest('.card');
+  const pill = card && card.querySelector('[data-status-pill]');
+  if (pill) {
+    pill.className = `status-pill s-${status}`;
+    pill.textContent = STATUS_LABEL[status] || status;
+  }
 
   try {
     const res = await fetch(`/api/jobs/${id}/status`, {
@@ -977,6 +1147,34 @@ async function saveJobInfo(btn) {
     view.querySelector('.card-company').textContent =
       (payload.company || '') + (payload.location ? ' · ' + payload.location : '');
 
+    // Sync compact-row fields
+    const card = block.closest('.card');
+    if (card) {
+      const rowTitle = card.querySelector('.row-title');
+      const rowCompany = card.querySelector('.row-company');
+      const rowLoc = card.querySelector('.row-loc');
+      if (rowTitle) rowTitle.textContent = payload.title || '(No Title)';
+      if (rowCompany) rowCompany.textContent = payload.company || '';
+      if (rowLoc) {
+        if (payload.location) {
+          rowLoc.textContent = '📍 ' + payload.location;
+          rowLoc.title = payload.location;
+          rowLoc.style.display = '';
+        } else {
+          rowLoc.style.display = 'none';
+        }
+      } else if (payload.location) {
+        const meta = card.querySelector('.row-meta');
+        if (meta) {
+          const loc = document.createElement('span');
+          loc.className = 'row-loc';
+          loc.title = payload.location;
+          loc.textContent = '📍 ' + payload.location;
+          meta.insertBefore(loc, meta.firstChild);
+        }
+      }
+    }
+
     // Switch back to view mode
     view.style.display = '';
     block.querySelector('.info-edit').classList.remove('active');
@@ -1010,6 +1208,7 @@ function escHtml(str) {
 });
 
 loadStats();
+setLayout(currentLayout);
 loadJobs();
 </script>
 </body>
