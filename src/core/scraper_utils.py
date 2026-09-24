@@ -12,7 +12,7 @@ import time
 
 from lingua import Language, LanguageDetectorBuilder
 
-from config import (
+from core.config import (
     DEFAULT_KEYWORDS,
     DEFAULT_MAX_PAGES,
     CDP_HOST,

@@ -28,22 +28,31 @@ Run the quick scrape every morning before your application session to capture th
 ```
 job_scraper/
 ├── src/
-│   ├── ai_matcher.py              # AI matching engine
-│   ├── config.py                  # Central configuration
-│   ├── db_mongo.py                # MongoDB operations
-│   ├── indeed_scraper.py          # Indeed scraper (24-hour window)
-│   ├── linkedin_scraper.py        # LinkedIn scraper (24-hour window, keyword loop)
-│   ├── linkedin_quick_scraper.py  # LinkedIn quick scraper (12-hour window, direct URL)
-│   ├── scraper_utils.py           # Shared utilities
-│   └── view_jobs.py               # View and query results
+│   ├── core/                          # Shared infrastructure
+│   │   ├── config.py                  # Central configuration
+│   │   ├── db_mongo.py                # MongoDB operations
+│   │   └── scraper_utils.py           # Shared utilities
+│   ├── scrapers/                      # Job scrapers
+│   │   ├── indeed_scraper.py          # Indeed scraper (24-hour window)
+│   │   ├── linkedin_scraper.py        # LinkedIn scraper (24-hour window)
+│   │   ├── linkedin_quick_scraper.py  # LinkedIn quick scraper (12-hour window)
+│   │   └── manual_apply_scraper.py    # Manual-apply URL processor
+│   ├── matching/
+│   │   └── ai_matcher.py              # AI matching engine
+│   ├── web/
+│   │   └── web_app.py                 # Flask Job Tracker UI
+│   └── bot/
+│       └── telegram_bot.py            # Telegram bot
 ├── docs/
-│   ├── user_profile.md            # Your resume — required for AI
-│   └── matching_criteria.md       # Your job criteria — required for AI
-├── logs/                          # Log output directory
-├── run_task.sh                    # Full pipeline (6 PM — Indeed + LinkedIn 24 h)
-├── run_quick.sh                   # Quick pipeline (11 AM — LinkedIn 12 h only)
-├── com.user.job_scraper.plist     # LaunchD config (daily schedule)
-└── .env                           # Environment variables (not in git)
+│   ├── user_profile.md                # Your resume — required for AI
+│   └── matching_criteria.md           # Your job criteria — required for AI
+├── templates/                         # Web UI templates
+├── logs/                              # Log output directory
+├── run_task.sh                        # Full pipeline (6 PM — Indeed + LinkedIn 24 h)
+├── run_quick.sh                       # Quick pipeline (11 AM — LinkedIn 12 h only)
+├── start_ui.sh                        # Start Job Tracker web UI
+├── com.user.job_scraper.plist         # LaunchD config (daily schedule)
+└── .env                               # Environment variables (not in git)
 ```
 
 ---
@@ -78,15 +87,15 @@ MATCH_THRESHOLD=7.0
 
 ```bash
 # Quick smoke test — 1 page each, 3 jobs analyzed
-python3 src/indeed_scraper.py -k "frontend" -p 1
-python3 src/linkedin_scraper.py -k "frontend" -p 1
-python3 src/ai_matcher.py -l 3
+python3 src/scrapers/indeed_scraper.py -k "frontend" -p 1
+python3 src/scrapers/linkedin_scraper.py -k "frontend" -p 1
+python3 src/matching/ai_matcher.py -l 3
 
 # Test quick scraper (1 page, 5 jobs)
-python3 src/linkedin_quick_scraper.py -p 1 -j 5
+python3 src/scrapers/linkedin_quick_scraper.py -p 1 -j 5
 
-# View results
-python3 src/view_jobs.py
+# View results (web UI)
+./start_ui.sh
 ```
 
 ---
@@ -244,7 +253,7 @@ Estimated time: **10–20 minutes** (3 pages, up to 30 jobs/page).
 
 ## Configuration
 
-### Keywords — `src/config.py`
+### Keywords — `src/core/config.py`
 
 ```python
 DEFAULT_KEYWORDS = [
@@ -286,13 +295,13 @@ Raise it (e.g. `8.0`) for fewer, higher-quality results. Lower it (e.g. `6.0`) t
 | `--max-jobs` | `-j` | `30` | `linkedin_quick_scraper` |
 
 ```bash
-python3 src/indeed_scraper.py -k "react developer" -p 2
-python3 src/linkedin_scraper.py -k "frontend" "full stack" -p 3
+python3 src/scrapers/indeed_scraper.py -k "react developer" -p 2
+python3 src/scrapers/linkedin_scraper.py -k "frontend" "full stack" -p 3
 
 # Quick scraper — no keywords; uses the pre-built 12-hour URL
-python3 src/linkedin_quick_scraper.py              # 3 pages, 30 jobs/page
-python3 src/linkedin_quick_scraper.py -p 2         # 2 pages
-python3 src/linkedin_quick_scraper.py -p 3 -j 20   # 3 pages, 20 jobs each
+python3 src/scrapers/linkedin_quick_scraper.py              # 3 pages, 30 jobs/page
+python3 src/scrapers/linkedin_quick_scraper.py -p 2         # 2 pages
+python3 src/scrapers/linkedin_quick_scraper.py -p 3 -j 20   # 3 pages, 20 jobs each
 ```
 
 ### AI Matcher
@@ -304,8 +313,8 @@ python3 src/linkedin_quick_scraper.py -p 3 -j 20   # 3 pages, 20 jobs each
 | `--threshold` | `-t` | `7.0` |
 
 ```bash
-python3 src/ai_matcher.py -l 5              # test with 5 jobs
-python3 src/ai_matcher.py -s indeed -t 7.5  # Indeed only, stricter
+python3 src/matching/ai_matcher.py -l 5              # test with 5 jobs
+python3 src/matching/ai_matcher.py -s indeed -t 7.5  # Indeed only, stricter
 ```
 
 ---
@@ -355,7 +364,7 @@ Jobs that scored ≥ threshold:
 Update a job after applying:
 
 ```python
-from src.db_mongo import get_collection
+from core.db_mongo import get_collection
 
 matched = get_collection("matched_jobs")
 matched.update_one(
@@ -369,9 +378,7 @@ matched.update_one(
 ## Viewing Results
 
 ```bash
-python3 src/view_jobs.py                   # all matches
-python3 src/view_jobs.py --source indeed   # Indeed only
-python3 src/view_jobs.py --min-score 8.0   # high scores only
+./start_ui.sh                   # open Job Tracker web UI
 ```
 
 ---
@@ -425,7 +432,7 @@ tail -f logs/launchd_stderr.log          # check errors
 ### MongoDB connection failed
 
 ```bash
-python3 -c "from src.db_mongo import init_db; init_db(); print('OK')"
+python3 -c "import sys; sys.path.insert(0,'src'); from core.db_mongo import init_db; init_db(); print('OK')"
 ```
 
 Check `MONGO_URI` in `.env` and ensure your IP is whitelisted in MongoDB Atlas.
@@ -435,8 +442,8 @@ Check `MONGO_URI` in `.env` and ensure your IP is whitelisted in MongoDB Atlas.
 All existing jobs already have `matched_at` set. Run the scrapers first to fetch today's listings:
 
 ```bash
-python3 src/indeed_scraper.py
-python3 src/linkedin_scraper.py
+python3 src/scrapers/indeed_scraper.py
+python3 src/scrapers/linkedin_scraper.py
 ```
 
 ---

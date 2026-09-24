@@ -8,21 +8,22 @@ import os
 from datetime import datetime
 from typing import List, Dict, Optional
 
-# Add src directory to path to allow imports when running from project root
-if __name__ == "__main__":
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add src/ to path so package imports work when run as a script
+_SRC_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _SRC_ROOT not in sys.path:
+    sys.path.insert(0, _SRC_ROOT)
 
 from openai import OpenAI
 from dotenv import load_dotenv
 
-from db_mongo import (
+from core.db_mongo import (
     init_db,
     get_collection,
     get_new_jobs,
     is_job_id_exists,
     mark_job_as_matched,
 )
-from scraper_utils import strip_html
+from core.scraper_utils import strip_html
 
 load_dotenv()
 

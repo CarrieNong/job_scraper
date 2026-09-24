@@ -57,9 +57,9 @@ cd "$PROJECT_DIR" || exit 1
 
 # Step 2 & 3: Indeed + LinkedIn scrapers (run in parallel)
 log "Step 1/3: Running Indeed and LinkedIn scrapers in parallel..."
-$PYTHON src/indeed_scraper.py --max-pages 3 > "$LOG_DIR/indeed_$(date +%Y%m%d).log" 2>&1 &
+$PYTHON src/scrapers/indeed_scraper.py --max-pages 3 > "$LOG_DIR/indeed_$(date +%Y%m%d).log" 2>&1 &
 INDEED_PID=$!
-$PYTHON src/linkedin_scraper.py --max-pages 3 > "$LOG_DIR/linkedin_$(date +%Y%m%d).log" 2>&1 &
+$PYTHON src/scrapers/linkedin_scraper.py --max-pages 3 > "$LOG_DIR/linkedin_$(date +%Y%m%d).log" 2>&1 &
 LINKEDIN_PID=$!
 
 log "  Indeed  (PID: $INDEED_PID)  and  LinkedIn (PID: $LINKEDIN_PID)  running..."
@@ -82,7 +82,7 @@ fi
 
 # Step 4: AI matching (runs only after both scrapers are done)
 log "Step 3/3: Running AI job matching (both scrapers done)..."
-$PYTHON src/ai_matcher.py --threshold 7.0 > "$LOG_DIR/matcher_$(date +%Y%m%d).log" 2>&1
+$PYTHON src/matching/ai_matcher.py --threshold 7.0 > "$LOG_DIR/matcher_$(date +%Y%m%d).log" 2>&1
 MATCHER_EXIT=$?
 if [ $MATCHER_EXIT -eq 0 ]; then
     log "✅ AI matcher completed successfully"
@@ -107,7 +107,7 @@ log "Fetching today's stats..."
 STATS=$($PYTHON << 'EOF'
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-from db_mongo import get_collection
+from core.db_mongo import get_collection
 from datetime import datetime
 try:
     jobs         = get_collection("jobs")

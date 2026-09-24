@@ -14,4 +14,4 @@ echo ""
 # Open browser after a short delay
 (sleep 1.5 && open "http://127.0.0.1:${PORT}") &
 
-exec "$PYTHON" src/web_app.py --port "$PORT"
+exec "$PYTHON" src/web/web_app.py --port "$PORT"

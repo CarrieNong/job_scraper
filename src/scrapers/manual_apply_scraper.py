@@ -5,12 +5,12 @@ For jobs you already applied to manually (LinkedIn / Indeed).
 
 Usage:
     # Pass URLs directly on the command line
-    python src/manual_apply_scraper.py \
+    python src/scrapers/manual_apply_scraper.py \
         "https://www.linkedin.com/jobs/view/1234567890/" \
         "https://de.indeed.com/viewjob?jk=abcdef123"
 
     # Or point to a text file with one URL per line
-    python src/manual_apply_scraper.py --file my_applied_urls.txt
+    python src/scrapers/manual_apply_scraper.py --file my_applied_urls.txt
 
 What it does for EACH url
 --------------------------
@@ -32,15 +32,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── path setup ────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_SRC_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _SRC_ROOT not in sys.path:
+    sys.path.insert(0, _SRC_ROOT)
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-from db_mongo import init_db, get_collection, mark_job_as_matched, save_job
-from ai_matcher import analyze_job_with_ai, load_user_profile, load_matching_criteria, _analysis_fields
-from scraper_utils import connect_browser, strip_html, pause, detect_job_detail_language, safe_text
-from config import INDEED_CONFIG
+from core.db_mongo import init_db, get_collection, mark_job_as_matched, save_job
+from matching.ai_matcher import analyze_job_with_ai, load_user_profile, load_matching_criteria, _analysis_fields
+from core.scraper_utils import connect_browser, strip_html, pause, detect_job_detail_language, safe_text
+from core.config import INDEED_CONFIG
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -84,8 +85,6 @@ def scrape_linkedin_job(page, url: str) -> Optional[dict]:
     Navigate to a LinkedIn search-results page with currentJobId and extract
     job data using the same selectors as linkedin_scraper.py.
     """
-    from scraper_utils import safe_text  # reuse the original helper
-
     job_id = extract_linkedin_job_id(url)
     if not job_id:
         print(f"  ⚠️  Cannot extract LinkedIn job_id from: {url}")

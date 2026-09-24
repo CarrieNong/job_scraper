@@ -8,19 +8,20 @@ import os
 from urllib.parse import quote_plus
 import random
 
-# Add src directory to path to allow imports when running from project root
-if __name__ == "__main__":
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add src/ to path so package imports work when run as a script
+_SRC_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _SRC_ROOT not in sys.path:
+    sys.path.insert(0, _SRC_ROOT)
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
-    
-from db_mongo import init_db, save_job, is_job_id_exists, increment_scraper_stat
-from config import (
+
+from core.db_mongo import init_db, save_job, is_job_id_exists, increment_scraper_stat
+from core.config import (
     MAX_JOBS_PER_PAGE,
     INDEED_CONFIG,
 )
-from scraper_utils import (
+from core.scraper_utils import (
     pause,
     safe_text,
     safe_attr,

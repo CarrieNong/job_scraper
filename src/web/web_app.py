@@ -9,13 +9,16 @@ from datetime import datetime
 from bson import ObjectId
 import json
 
-# Add src directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add src/ to path so package imports work when run as a script
+_SRC_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_PROJECT_ROOT = os.path.dirname(_SRC_ROOT)
+if _SRC_ROOT not in sys.path:
+    sys.path.insert(0, _SRC_ROOT)
 
 import threading
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
-from db_mongo import (
+from core.db_mongo import (
     get_collection,
     get_scraper_stats,
     get_unmatched_jobs,
@@ -27,8 +30,8 @@ load_dotenv()
 
 app = Flask(
     __name__,
-    template_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "templates"),
-    static_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static"),
+    template_folder=os.path.join(_PROJECT_ROOT, "templates"),
+    static_folder=os.path.join(_PROJECT_ROOT, "static"),
 )
 
 # ─── Status mapping ───────────────────────────────────────────────────────────
@@ -421,7 +424,7 @@ def api_manual_apply():
             _manual_apply_state["fail_count"] = 0
 
             # Import here to avoid circular deps at module load
-            from manual_apply_scraper import process_urls as _process_urls
+            from scrapers.manual_apply_scraper import process_urls as _process_urls
 
             # Monkey-patch print so progress goes to the state log
             import builtins

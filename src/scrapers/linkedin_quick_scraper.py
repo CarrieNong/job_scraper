@@ -9,16 +9,17 @@ always apply to the freshest listings.
 
 Typical usage
 -------------
-  python3 src/linkedin_quick_scraper.py              # 3 pages, up to 30 jobs/page
-  python3 src/linkedin_quick_scraper.py -p 2         # limit to 2 pages
-  python3 src/linkedin_quick_scraper.py -p 3 -j 20   # 3 pages, 20 jobs each
+  python3 src/scrapers/linkedin_quick_scraper.py              # 3 pages, up to 30 jobs/page
+  python3 src/scrapers/linkedin_quick_scraper.py -p 2         # limit to 2 pages
+  python3 src/scrapers/linkedin_quick_scraper.py -p 3 -j 20   # 3 pages, 20 jobs each
 """
 import sys
 import os
 
-# Allow direct execution from the project root
-if __name__ == "__main__":
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add src/ to path so package imports work when run as a script
+_SRC_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _SRC_ROOT not in sys.path:
+    sys.path.insert(0, _SRC_ROOT)
 
 import argparse
 import random
@@ -26,9 +27,9 @@ import random
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-from db_mongo import init_db, save_job, is_job_id_exists, increment_scraper_stat
-from config import MAX_JOBS_PER_PAGE, DEFAULT_MAX_PAGES, LINKEDIN_QUICK_CONFIG
-from scraper_utils import (
+from core.db_mongo import init_db, save_job, is_job_id_exists, increment_scraper_stat
+from core.config import MAX_JOBS_PER_PAGE, DEFAULT_MAX_PAGES, LINKEDIN_QUICK_CONFIG
+from core.scraper_utils import (
     pause,
     connect_browser,
     open_scraper_page,
@@ -40,7 +41,7 @@ from scraper_utils import (
 
 # Re-use the core scraping helpers from the standard LinkedIn scraper
 # (scroll logic, job-card extraction, pagination) — no duplication needed.
-from linkedin_scraper import (
+from scrapers.linkedin_scraper import (
     scrape_jobs,
     go_to_next_page,
 )

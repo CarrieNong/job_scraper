@@ -46,7 +46,7 @@ cd "$PROJECT_DIR" || exit 1
 # Step 2: LinkedIn quick scraper (3 pages × 30 jobs, last 12 hours)
 # ---------------------------------------------------------------------------
 log "Step 1/2: Running LinkedIn quick scraper (12-hour window)..."
-$PYTHON src/linkedin_quick_scraper.py \
+$PYTHON src/scrapers/linkedin_quick_scraper.py \
   --max-pages 3 \
   > "$LOG_DIR/linkedin_quick_$(date +%Y%m%d).log" 2>&1
 QUICK_EXIT=$?
@@ -61,7 +61,7 @@ fi
 # Step 3: AI matching (only jobs not yet analyzed)
 # ---------------------------------------------------------------------------
 log "Step 2/2: Running AI job matching..."
-$PYTHON src/ai_matcher.py --threshold 7.0 \
+$PYTHON src/matching/ai_matcher.py --threshold 7.0 \
   > "$LOG_DIR/matcher_quick_$(date +%Y%m%d).log" 2>&1
 MATCHER_EXIT=$?
 
@@ -88,7 +88,7 @@ log "AI Matcher:     $([ $MATCHER_EXIT -eq 0 ] && echo '✅' || echo '❌')"
 STATS=$($PYTHON << 'EOF'
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-from db_mongo import get_collection
+from core.db_mongo import get_collection
 from datetime import datetime, timedelta
 try:
     jobs         = get_collection("jobs")

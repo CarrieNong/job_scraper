@@ -19,8 +19,8 @@ sys.path.insert(0, _SRC)
 
 from dotenv import load_dotenv
 
-from db_mongo import get_collection
-from scraper_utils import (
+from core.db_mongo import get_collection
+from core.scraper_utils import (
     GERMAN_SHARE_THRESHOLD,
     detect_job_detail_language,
     is_title_excluded,
@@ -246,7 +246,7 @@ def main():
         print("  1. Review the list above")
         print("  2. python3 scripts/cleanup_excluded_titles.py --execute")
         print("  3. python3 scripts/cleanup_excluded_titles.py --execute --reset-ai")
-        print("  4. python3 src/ai_matcher.py -l 20   # smoke-test then full run")
+        print("  4. python3 src/matching/ai_matcher.py -l 20   # smoke-test then full run")
 
 
 if __name__ == "__main__":
