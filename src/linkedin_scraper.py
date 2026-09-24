@@ -26,6 +26,8 @@ from scraper_utils import (
     safe_text,
     parse_args,
     connect_browser,
+    open_scraper_page,
+    goto_page,
     is_title_excluded,
     detect_job_detail_language,
 )
@@ -269,7 +271,7 @@ def scrape_keyword(page, keyword, max_pages, max_jobs_per_page=MAX_JOBS_PER_PAGE
         List of all job data dictionaries saved for this keyword
     """
     print(f"\n========== Keyword: {keyword} ==========")
-    page.goto(jobs_search_url(keyword), wait_until="domcontentloaded")
+    goto_page(page, jobs_search_url(keyword))
     pause(4, 7, f"Waiting for search results: {keyword}")
 
     all_jobs = []
@@ -297,7 +299,7 @@ def main():
     with sync_playwright() as playwright:
         browser = connect_browser(playwright, "LinkedIn")
         context = browser.contexts[0]
-        page = context.pages[0] if context.pages else context.new_page()
+        page = open_scraper_page(context, bring_to_front=True)
         print("Log in to LinkedIn in the debug Chrome window if you have not already.")
 
         for i, keyword in enumerate(keywords):

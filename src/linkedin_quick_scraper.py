@@ -28,7 +28,15 @@ from playwright.sync_api import sync_playwright
 
 from db_mongo import init_db, save_job, is_job_id_exists, increment_scraper_stat
 from config import MAX_JOBS_PER_PAGE, DEFAULT_MAX_PAGES, LINKEDIN_QUICK_CONFIG
-from scraper_utils import pause, connect_browser, is_title_excluded, detect_job_detail_language, safe_text
+from scraper_utils import (
+    pause,
+    connect_browser,
+    open_scraper_page,
+    goto_page,
+    is_title_excluded,
+    detect_job_detail_language,
+    safe_text,
+)
 
 # Re-use the core scraping helpers from the standard LinkedIn scraper
 # (scroll logic, job-card extraction, pagination) — no duplication needed.
@@ -90,7 +98,7 @@ def scrape_quick(page, max_pages: int, max_jobs_per_page: int) -> list:
         f"(last {TIME_WINDOW_HOURS} h) =========="
     )
     print(f"URL: {QUICK_URL}")
-    page.goto(QUICK_URL, wait_until="domcontentloaded")
+    goto_page(page, QUICK_URL)
     pause(4, 7, "Waiting for quick-search results to load")
 
     all_jobs: list = []
@@ -124,7 +132,7 @@ def main():
     with sync_playwright() as playwright:
         browser = connect_browser(playwright, "LinkedIn")
         context = browser.contexts[0]
-        page = context.pages[0] if context.pages else context.new_page()
+        page = open_scraper_page(context, bring_to_front=True)
         print("Log in to LinkedIn in the debug Chrome window if you have not already.")
 
         all_jobs = scrape_quick(page, max_pages=max_pages, max_jobs_per_page=max_jobs)

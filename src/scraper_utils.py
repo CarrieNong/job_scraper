@@ -294,6 +294,53 @@ def start_debug_chrome(site_name="the website"):
     )
 
 
+def open_scraper_page(context, bring_to_front=False):
+    """
+    Open a dedicated tab for one scraper.
+
+    Parallel scrapers must not share context.pages[0]. A second page.goto on
+    the same tab aborts the first navigation (net::ERR_ABORTED), so LinkedIn
+    never finishes loading when Indeed starts at the same time.
+    """
+    page = context.new_page()
+    if bring_to_front:
+        try:
+            page.bring_to_front()
+        except Exception:
+            pass
+    return page
+
+
+def goto_page(page, url, wait_until="domcontentloaded", attempts=3, timeout=60000):
+    """
+    Navigate, retrying when Chrome aborts the load.
+
+    LinkedIn often replaces the original request with a redirect. Playwright
+    reports that as net::ERR_ABORTED even if the destination later commits.
+    """
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            page.goto(url, wait_until=wait_until, timeout=timeout)
+            return
+        except Exception as e:
+            last_error = e
+            aborted = "ERR_ABORTED" in str(e)
+            if aborted:
+                try:
+                    current = page.url or ""
+                except Exception:
+                    current = ""
+                if current and current != "about:blank" and "linkedin.com" in current:
+                    print(f"Navigation aborted, continuing at {current}")
+                    return
+            if not aborted or attempt == attempts:
+                raise
+            print(f"Navigation aborted (attempt {attempt}/{attempts}), retrying...")
+            time.sleep(2)
+    raise last_error
+
+
 def connect_browser(playwright, site_name="the website"):
     """
     Connect to Chrome via Chrome DevTools Protocol.

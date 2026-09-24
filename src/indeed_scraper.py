@@ -26,6 +26,7 @@ from scraper_utils import (
     safe_attr,
     parse_args,
     connect_browser,
+    open_scraper_page,
     is_title_excluded,
     detect_job_detail_language,
     strip_html,
@@ -260,7 +261,7 @@ def main():
     with sync_playwright() as playwright:
         browser = connect_browser(playwright, "Indeed")
         context = browser.contexts[0]
-        page = context.pages[0] if context.pages else context.new_page()
+        page = open_scraper_page(context)
         print("Use the debug Chrome window. Dismiss Indeed cookie banners if prompted.")
 
         for i, keyword in enumerate(keywords):

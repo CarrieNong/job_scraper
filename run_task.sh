@@ -22,18 +22,36 @@ trap 'log "ERROR: Script failed at line $LINENO"' ERR
 
 log "=== Job Scraping Pipeline Started ==="
 
-# Step 1: Launch Chrome in remote debug mode (background)
-log "Starting Chrome with remote debugging..."
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
-  --remote-debugging-port=9222 \
-  --user-data-dir="/tmp/chrome_selenium" \
-  > /dev/null 2>&1 &
+# Step 1: Launch Chrome in remote debug mode (background).
+# Reuse an existing debug Chrome so a second run does not kill the first
+# profile and close the tabs the scrapers are using.
+CHROME_PID=""
+if lsof -nP -iTCP:9222 -sTCP:LISTEN >/dev/null 2>&1; then
+    log "Chrome remote debugging already listening on 9222, reusing it"
+else
+    log "Starting Chrome with remote debugging..."
+    /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+      --remote-debugging-port=9222 \
+      --user-data-dir="/tmp/chrome_selenium" \
+      --no-first-run \
+      --no-default-browser-check \
+      > "$LOG_DIR/chrome.log" 2>&1 &
+    CHROME_PID=$!
+    log "Chrome started (PID: $CHROME_PID)"
+fi
 
-CHROME_PID=$!
-log "Chrome started (PID: $CHROME_PID)"
+# Wait until the debugging port is actually accepting connections
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    if lsof -nP -iTCP:9222 -sTCP:LISTEN >/dev/null 2>&1; then
+        log "Chrome remote debugging is ready"
+        break
+    fi
+    sleep 0.5
+done
 
-# Wait for Chrome to be ready
-sleep 5
+if ! lsof -nP -iTCP:9222 -sTCP:LISTEN >/dev/null 2>&1; then
+    log "⚠️  WARNING: Chrome debugging port 9222 is not open. See $LOG_DIR/chrome.log"
+fi
 
 cd "$PROJECT_DIR" || exit 1
 
@@ -72,9 +90,11 @@ else
     log "⚠️  WARNING: AI matcher failed (exit code: $MATCHER_EXIT)"
 fi
 
-# Close Chrome
-log "Closing Chrome..."
-kill $CHROME_PID 2>/dev/null || true
+# Close only the Chrome this run started. A reused debug window is left open.
+if [ -n "$CHROME_PID" ]; then
+    log "Closing Chrome..."
+    kill $CHROME_PID 2>/dev/null || true
+fi
 
 # Pipeline summary
 log "=== Pipeline Completed ==="
