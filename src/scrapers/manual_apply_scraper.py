@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
 Manual Apply Scraper
-For jobs you already applied to manually (LinkedIn / Indeed).
+For jobs you already applied to manually (LinkedIn / Indeed / any career page).
 
 Usage:
     # Pass URLs directly on the command line
     python src/scrapers/manual_apply_scraper.py \
         "https://www.linkedin.com/jobs/view/1234567890/" \
-        "https://de.indeed.com/viewjob?jk=abcdef123"
+        "https://de.indeed.com/viewjob?jk=abcdef123" \
+        "https://careers.example.com/jobs/frontend-engineer"
 
     # Or point to a text file with one URL per line
     python src/scrapers/manual_apply_scraper.py --file my_applied_urls.txt
@@ -16,6 +17,8 @@ What it does for EACH url
 --------------------------
 1. Opens the URL in the existing debug Chrome session (CDP).
 2. Scrapes title / company / location / description.
+   - LinkedIn / Indeed: site-specific selectors
+   - Other URLs: trafilatura main-content extract + AI metadata
 3. Runs AI matching (score stored but NOT used as a filter).
 4. Saves the job to matched_jobs with status="applied".
 5. Also upserts a record in the main jobs collection.
@@ -24,9 +27,11 @@ import sys
 import os
 import re
 import json
+import hashlib
 import argparse
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urlparse, urlunparse
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -37,22 +42,38 @@ if _SRC_ROOT not in sys.path:
     sys.path.insert(0, _SRC_ROOT)
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+import trafilatura
 
 from core.db_mongo import init_db, get_collection, mark_job_as_matched, save_job
 from matching.ai_matcher import analyze_job_with_ai, load_user_profile, load_matching_criteria, _analysis_fields
 from core.scraper_utils import connect_browser, strip_html, pause, detect_job_detail_language, safe_text
 from core.config import INDEED_CONFIG
 
+# Minimum chars of extracted body text before we treat a generic page as a JD
+_GENERIC_MIN_DESC_CHARS = 200
+
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def detect_source(url: str) -> str:
-    """Return 'linkedin' or 'indeed' based on the URL hostname."""
+    """Return 'linkedin', 'indeed', or 'manual' based on the URL hostname."""
     url_lower = url.lower()
     if "linkedin.com" in url_lower:
         return "linkedin"
     if "indeed.com" in url_lower:
         return "indeed"
-    return "unknown"
+    return "manual"
+
+
+def canonicalize_url(url: str) -> str:
+    """Strip fragment and trailing slash for stable job_id hashing."""
+    parsed = urlparse(url.strip())
+    path = parsed.path.rstrip("/") or "/"
+    return urlunparse((parsed.scheme, parsed.netloc.lower(), path, "", parsed.query, ""))
+
+
+def job_id_from_url(url: str) -> str:
+    """Stable short id derived from the canonical URL (for non-LinkedIn/Indeed)."""
+    return hashlib.sha1(canonicalize_url(url).encode("utf-8")).hexdigest()[:16]
 
 
 def extract_linkedin_job_id(url: str) -> Optional[str]:
@@ -284,6 +305,104 @@ def scrape_indeed_job(page, url: str) -> Optional[dict]:
     }
 
 
+def _extract_main_text_from_html(html: str, url: str) -> str:
+    """
+    Pull the main article/job body from raw HTML via trafilatura.
+    Returns empty string if extraction fails.
+    """
+    if not html:
+        return ""
+    text = trafilatura.extract(
+        html,
+        url=url,
+        include_comments=False,
+        include_tables=True,
+        favor_precision=True,
+        output_format="txt",
+    )
+    return (text or "").strip()
+
+
+def _fallback_page_text(page) -> str:
+    """Last-resort plain text from semantic containers or body."""
+    for selector in ("main", "article", "[role='main']", "body"):
+        try:
+            loc = page.locator(selector).first
+            if loc.count() == 0:
+                continue
+            text = (loc.inner_text(timeout=3000) or "").strip()
+            if len(text) >= _GENERIC_MIN_DESC_CHARS:
+                return text
+        except Exception:
+            continue
+    return ""
+
+
+def scrape_generic_job(page, url: str) -> Optional[dict]:
+    """
+    Open any career-page URL, extract main content with trafilatura,
+    and return a job dict (title/company/location filled later by AI if missing).
+    """
+    canonical_url = canonicalize_url(url)
+    job_id = job_id_from_url(canonical_url)
+
+    print(f"  → Navigating to {url}")
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=25000)
+    except Exception as e:
+        print(f"  ⚠️  Navigation error: {e}")
+        return None
+
+    # Give SPA career sites a moment to hydrate
+    pause(1.5, 2.5)
+    try:
+        page.wait_for_load_state("networkidle", timeout=8000)
+    except PlaywrightTimeoutError:
+        pass
+
+    html = ""
+    try:
+        html = page.content()
+    except Exception as e:
+        print(f"  ⚠️  Could not read page HTML: {e}")
+
+    description = _extract_main_text_from_html(html, canonical_url)
+    if description:
+        print(f"  📄 trafilatura extracted {len(description)} chars")
+    else:
+        print("  ⚠️  trafilatura returned empty — falling back to page text")
+        description = _fallback_page_text(page)
+        if description:
+            print(f"  📄 fallback text: {len(description)} chars")
+
+    if len(description) < _GENERIC_MIN_DESC_CHARS:
+        print(
+            f"  ⚠️  Extracted text too short ({len(description)} chars "
+            f"< {_GENERIC_MIN_DESC_CHARS}) — not a usable job page"
+        )
+        return None
+
+    # Leave title/company/location empty — process_urls will infer via AI
+    try:
+        hint = (page.title() or "").strip()
+        if hint:
+            print(f"  💡 Page <title> hint: {hint[:80]}")
+    except Exception:
+        pass
+
+    return {
+        "title": "",
+        "company": "",
+        "location": "",
+        "applicants": "",
+        "description": description,
+        "link": canonical_url,
+        "job_id": job_id,
+        "source": "manual",
+        "status": "applied",
+    }
+
+
 # ── AI metadata inference ─────────────────────────────────────────────────────
 
 def infer_job_metadata_with_ai(description_text: str) -> dict:
@@ -306,7 +425,8 @@ def infer_job_metadata_with_ai(description_text: str) -> dict:
     trimmed = description_text[:3000]
 
     prompt = (
-        "The following text was extracted from a LinkedIn job posting. "
+        "The following text was extracted from a job posting page "
+        "(LinkedIn, Indeed, or a company careers site). "
         "Based only on the text below, infer the job title, company name, and location. "
         "If you cannot determine a field with reasonable confidence, return an empty string.\n\n"
         f"Job description text:\n{trimmed}\n\n"
@@ -427,7 +547,7 @@ def process_urls(urls: list[str], applied_date: datetime = None):
     Scrape, AI-match, and mark as applied for each URL.
 
     Args:
-        urls: List of LinkedIn / Indeed job URLs
+        urls: LinkedIn / Indeed / any company career-page job URLs
         applied_date: Date the user applied (defaults to now if not provided)
     """
     if not urls:
@@ -446,7 +566,7 @@ def process_urls(urls: list[str], applied_date: datetime = None):
     results = {"ok": [], "failed": []}
 
     with sync_playwright() as playwright:
-        browser = connect_browser(playwright, "LinkedIn/Indeed")
+        browser = connect_browser(playwright, "job sites")
         context = browser.contexts[0]
         page = context.pages[0] if context.pages else context.new_page()
 
@@ -464,9 +584,8 @@ def process_urls(urls: list[str], applied_date: datetime = None):
                 elif source == "indeed":
                     job = scrape_indeed_job(page, url)
                 else:
-                    print(f"  ⚠️  Unknown source — skipping: {url}")
-                    results["failed"].append(url)
-                    continue
+                    print("  🌐 Generic career page — using trafilatura extract")
+                    job = scrape_generic_job(page, url)
             except Exception as e:
                 print(f"  ❌ Unexpected error while scraping: {type(e).__name__}: {e}")
                 results["failed"].append(url)
@@ -555,7 +674,7 @@ def main():
         "urls",
         nargs="*",
         metavar="URL",
-        help="One or more LinkedIn / Indeed job URLs",
+        help="One or more job URLs (LinkedIn, Indeed, or any company careers page)",
     )
     parser.add_argument(
         "--file",

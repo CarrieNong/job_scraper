@@ -187,7 +187,7 @@
 <div class="page">
   <h1>✍️ Log Manually Applied Jobs</h1>
   <p class="subtitle">
-    Paste one LinkedIn or Indeed job URL per line below.<br>
+    Paste one job URL per line (LinkedIn, Indeed, or any company careers page).<br>
     The scraper will open each URL, run AI matching, and save everything to your tracker with status <strong>Applied</strong> — regardless of score.
   </p>
 
@@ -220,8 +220,8 @@
     id="urlBox"
     class="url-box"
     placeholder="https://www.linkedin.com/jobs/view/1234567890/
-https://www.linkedin.com/jobs/view/9876543210/
-https://de.indeed.com/viewjob?jk=abcdef123456"
+https://de.indeed.com/viewjob?jk=abcdef123456
+https://careers.example.com/jobs/frontend-engineer"
   ></textarea>
 
   <div class="btn-row">
@@ -245,9 +245,10 @@ https://de.indeed.com/viewjob?jk=abcdef123456"
 
   <div class="tip">
     <strong>💡 Tips</strong><br>
-    • Make sure Chrome is open and you are <strong>logged in</strong> to LinkedIn / Indeed in the debug Chrome session.<br>
-    • LinkedIn canonical URL: <code>https://www.linkedin.com/jobs/view/JOB_ID/</code><br>
-    • Indeed URL: <code>https://de.indeed.com/viewjob?jk=JOB_KEY</code><br>
+    • Make sure Chrome is open (debug session). Log in to LinkedIn / Indeed if those URLs need it.<br>
+    • LinkedIn: <code>https://www.linkedin.com/jobs/view/JOB_ID/</code><br>
+    • Indeed: <code>https://de.indeed.com/viewjob?jk=JOB_KEY</code><br>
+    • Other sites: paste the job detail URL — main content is extracted automatically.<br>
     • You can also run from the terminal:<br>
     &nbsp;&nbsp;<code>python src/scrapers/manual_apply_scraper.py "URL1" "URL2"</code><br>
     &nbsp;&nbsp;<code>python src/scrapers/manual_apply_scraper.py --file my_urls.txt</code>
