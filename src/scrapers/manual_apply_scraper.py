@@ -419,7 +419,7 @@ def infer_job_metadata_with_ai(description_text: str) -> dict:
         print("  ⚠️  No OPENAI_API_KEY found – cannot infer job metadata")
         return {}
 
-    ai_model = os.getenv("AI_MODEL", "gpt-4o-mini")
+    ai_model = os.getenv("AI_MODEL", "gpt-4.1-mini")
 
     # Truncate so the prompt stays cheap; 3 000 chars is plenty for header info
     trimmed = description_text[:3000]

@@ -132,7 +132,7 @@ Respond ONLY with valid JSON:
         from openai import OpenAI
 
         client = OpenAI(api_key=api_key)
-        model = os.getenv("AI_MODEL", "gpt-4o-mini")
+        model = os.getenv("AI_MODEL", "gpt-4.1-mini")
         response = client.chat.completions.create(
             model=model,
             messages=[

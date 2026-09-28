@@ -28,7 +28,7 @@ from core.scraper_utils import strip_html
 load_dotenv()
 
 # AI Configuration
-AI_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")  # or "claude-3-5-sonnet-20241022"
+AI_MODEL = os.getenv("AI_MODEL", "gpt-4.1-mini")  # or "claude-3-5-sonnet-20241022"
 AI_API_KEY = os.getenv("OPENAI_API_KEY")  # or ANTHROPIC_API_KEY
 MATCH_THRESHOLD = float(os.getenv("MATCH_THRESHOLD", "7.0"))  # Minimum match score (0-10)
 
