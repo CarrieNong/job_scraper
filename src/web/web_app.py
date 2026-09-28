@@ -126,6 +126,9 @@ def api_jobs():
         query["status"] = status_filter
     if source_filter and source_filter != "all":
         query["source"] = source_filter
+    special_filter = request.args.get("special_match", "").strip().lower()
+    if special_filter in ("1", "true", "yes"):
+        query["special_match"] = True
     if search_query:
         query["$or"] = [
             {"title":   {"$regex": search_query, "$options": "i"}},
@@ -325,6 +328,8 @@ def api_update_unmatched_status(job_id: str):
                     "applicants":  job.get("applicants", ""),
                     "match_score": job.get("match_score", 0),
                     "recommendation":          job.get("recommendation", ""),
+                    "special_match":           bool(job.get("special_match")),
+                    "special_match_reasons":   job.get("special_match_reasons") or [],
                     "disqualification_reason": job.get("disqualification_reason", ""),
                     "match_reasons":           job.get("match_reasons", []),
                     "missing_requirements":    job.get("missing_requirements", []),

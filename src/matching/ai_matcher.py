@@ -5,6 +5,7 @@ Uses AI to analyze job listings and match them with user profile and preferences
 """
 import sys
 import os
+import re
 from datetime import datetime
 from typing import List, Dict, Optional
 
@@ -24,6 +25,10 @@ from core.db_mongo import (
     mark_job_as_matched,
 )
 from core.scraper_utils import strip_html
+from matching.german_gate import (
+    find_mandatory_german_requirement,
+    german_disqualification_analysis,
+)
 
 load_dotenv()
 
@@ -105,7 +110,14 @@ def build_matching_prompt(job: Dict, user_profile: str, criteria: str) -> str:
 
 ## Task Process
 
-### 1. Parse the JD (always do this first)
+### 1. German language gate (FIRST — stop if it fails)
+If the JD **explicitly** makes German a mandatory job language (required / mandatory / must-have / fluent / native / C1 / B2+ for the role), **STOP immediately**. Do not parse responsibilities, do not score stack, years, domain, or Special Match.
+
+Return score 1–2, recommendation "No", `special_match` false, and only record the German requirement. Leave `what_youll_do` empty.
+
+This gate does **not** fire for: location/office in Germany, a German company, German customers/market, or German as nice-to-have / plus / preferred.
+
+### 2. Parse the JD (only if the German gate passed)
 Read the full job description and split it into two lists of atomic items (one responsibility or requirement per bullet). Paraphrase clearly; do not invent items that are not in the JD.
 
 1. **What you'll do** — day-to-day responsibilities, duties, tasks, ownership
@@ -115,10 +127,13 @@ Then compare EACH item against the candidate profile:
 - **matched**: the candidate can reasonably do / already has this, based on the resume
 - **unmatched**: the candidate cannot do this, or it is a gap
 
-These two breakdowns MUST appear in the JSON even if the job is disqualified.
+These two breakdowns MUST appear in the JSON when you continue past the German gate.
 
-### 2. Score using Matching Criteria
-Apply the Matching Criteria above in order (hard requirements → required skills → nice-to-have bonus → domain bonus). Do not invent extra disqualification rules beyond that document.
+### 3. Score using Matching Criteria
+Apply the Matching Criteria above in order (hard requirements → required skills → nice-to-have bonus → domain bonus → Special Match). Do not invent extra disqualification rules beyond that document.
+
+If Special Match A, B, or C applies, set `special_match` true and score **9–10** (Leipzig: 9.5–10). Do **not** cap these at 8.
+Category C is frontend-leaning fullstack **only when the JD does not hard-require years, a specific backend language, or German**. If the JD does require those, follow original hard-requirement rules — do not mark special_match.
 
 ## JSON Response Format
 
@@ -126,6 +141,8 @@ Respond ONLY with valid JSON:
 {{
     "match_score": <number 0-10>,
     "recommendation": "<Yes/No/Maybe>",
+    "special_match": <true if Special Match A/B/C applies, else false>,
+    "special_match_reasons": ["<Why this is a Special Match, e.g. Pure frontend + React full match", "Located in Leipzig">],
     "disqualification_reason": "<Only include this field if score ≤ 3, provide specific reason>",
     "what_youll_do": {{
         "matched": ["<responsibility the candidate can do>"],
@@ -150,10 +167,34 @@ Respond ONLY with valid JSON:
     "summary": "<Brief 1-2 sentence summary explaining the match score>"
 }}
 
+EXAMPLE — German gate (STOP, do not score anything else):
+{{
+    "match_score": 1.0,
+    "recommendation": "No",
+    "special_match": false,
+    "special_match_reasons": [],
+    "disqualification_reason": "JD requires fluent / C1 German as a must-have job language; candidate does not speak German",
+    "what_youll_do": {{
+        "matched": [],
+        "unmatched": []
+    }},
+    "what_theyre_looking_for": {{
+        "matched": [],
+        "unmatched": ["Fluent German (C1) required"]
+    }},
+    "match_reasons": [],
+    "missing_requirements": ["German (mandatory job language)"],
+    "red_flags": ["Mandatory German language requirement — skipped remaining matching"],
+    "nice_to_have_matches": [],
+    "summary": "Stopped at German language gate; other requirements were not evaluated."
+}}
+
 EXAMPLE — disqualified (score ≤ 3), unknown backend ONLY, no Node/TS option:
 {{
     "match_score": 2.0,
     "recommendation": "No",
+    "special_match": false,
+    "special_match_reasons": [],
     "disqualification_reason": "Must-have backend is Python/Django only; no Node.js/TypeScript backend option; candidate only has Node.js plus light Python",
     "what_youll_do": {{
         "matched": ["Build React user interfaces", "Collaborate with product and design"],
@@ -174,6 +215,8 @@ EXAMPLE — mixed-stack approximate match (score ≥ 7), unknown language listed
 {{
     "match_score": 7.0,
     "recommendation": "Maybe",
+    "special_match": false,
+    "special_match_reasons": [],
     "what_youll_do": {{
         "matched": ["Design full-stack apps with React", "Build APIs and UIs", "Own product lifecycle"],
         "unmatched": []
@@ -194,10 +237,12 @@ EXAMPLE — mixed-stack approximate match (score ≥ 7), unknown language listed
     "summary": "Approximate match: strong React/TypeScript fit, but Python is also required alongside TypeScript — decide whether to apply."
 }}
 
-EXAMPLE — good match (score 7-8):
+EXAMPLE — good ordinary match (score 7-8, not special):
 {{
     "match_score": 8.0,
     "recommendation": "Yes",
+    "special_match": false,
+    "special_match_reasons": [],
     "what_youll_do": {{
         "matched": ["Develop React/TypeScript features", "Improve web performance", "Work with designers on UI"],
         "unmatched": []
@@ -217,13 +262,41 @@ EXAMPLE — good match (score 7-8):
         "TypeScript (listed as nice to have)",
         "Docker experience (listed as plus)"
     ],
-    "summary": "Excellent match with strong frontend skills and relevant e-commerce experience."
+    "summary": "Strong frontend match; not a Special Match category so score stays at 8."
+}}
+
+EXAMPLE — Special Match, pure frontend in Leipzig (score 9.5–10):
+{{
+    "match_score": 9.5,
+    "recommendation": "Yes",
+    "special_match": true,
+    "special_match_reasons": [
+        "Pure frontend role with full React/TypeScript stack match",
+        "Located in Leipzig"
+    ],
+    "what_youll_do": {{
+        "matched": ["Build React/TypeScript UI", "Own frontend architecture", "Work with designers"],
+        "unmatched": []
+    }},
+    "what_theyre_looking_for": {{
+        "matched": ["React", "TypeScript", "5+ years frontend", "English"],
+        "unmatched": []
+    }},
+    "match_reasons": [
+        "Frontend-only role fully matches candidate stack",
+        "Leipzig location is a strong extra fit"
+    ],
+    "missing_requirements": [],
+    "red_flags": [],
+    "nice_to_have_matches": ["Next.js"],
+    "summary": "Special Match: pure frontend React/TypeScript role in Leipzig."
 }}
 
 **Notes**:
 - Always fill what_youll_do and what_theyre_looking_for with concrete JD items
 - Include "disqualification_reason" ONLY if score ≤ 3
 - List "nice_to_have_matches" for bonus skills the candidate HAS
+- special_match must be true for categories A/B/C; those scores must be 9–10, not 8
 """
     return prompt
 
@@ -255,7 +328,7 @@ def analyze_job_with_ai(job: Dict, user_profile: str, criteria: str) -> Optional
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a strict professional career advisor specializing in job matching. Always parse each JD into 'what you'll do' and 'what they're looking for', then compare every item to the resume. Follow the Matching Criteria document in the user message exactly — it is the single source of truth for hard requirements and scoring. Do not invent extra disqualification rules. Respond only with valid JSON."
+                    "content": "You are a strict professional career advisor specializing in job matching. FIRST check whether German is an explicit mandatory job language (required / fluent / native / C1 / B2+). If yes, stop immediately: score 1–2, recommendation No, do not evaluate other skills. Otherwise parse each JD into 'what you'll do' and 'what they're looking for', then compare every item to the resume. Follow the Matching Criteria document in the user message exactly. Special Match A/B/C jobs must score 9–10 (not 8) with special_match=true. Respond only with valid JSON."
                 },
                 {
                     "role": "user",
@@ -271,12 +344,60 @@ def analyze_job_with_ai(job: Dict, user_profile: str, criteria: str) -> Optional
         # Parse JSON response
         import json
         analysis = json.loads(result)
-        
-        return analysis
+        return _finalize_special_match(job, analysis)
         
     except Exception as e:
         print(f"Error during AI analysis: {e}")
         return None
+
+
+def _as_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "yes", "1")
+    return False
+
+
+def _is_leipzig(job: Dict) -> bool:
+    """True if location (or title) clearly places the job in Leipzig."""
+    text = f"{job.get('location') or ''} {job.get('title') or ''}"
+    return bool(re.search(r"leipzig", text, re.I))
+
+
+def _finalize_special_match(job: Dict, analysis: Dict) -> Dict:
+    """Normalize special_match fields and apply Leipzig / special-match score floors."""
+    special = _as_bool(analysis.get("special_match"))
+    raw_reasons = analysis.get("special_match_reasons") or []
+    if isinstance(raw_reasons, str):
+        raw_reasons = [raw_reasons] if raw_reasons.strip() else []
+    elif not isinstance(raw_reasons, list):
+        raw_reasons = []
+    reasons = [str(item).strip() for item in raw_reasons if str(item).strip()]
+
+    in_leipzig = _is_leipzig(job)
+    if special and in_leipzig and not any("leipzig" in r.lower() for r in reasons):
+        reasons.append("Located in Leipzig")
+
+    try:
+        score = float(analysis.get("match_score") or 0)
+    except (TypeError, ValueError):
+        score = 0.0
+
+    if special:
+        floor = 9.5 if in_leipzig else 9.0
+        if score < floor:
+            score = floor
+        score = min(score, 10.0)
+        if analysis.get("recommendation") == "No":
+            analysis["recommendation"] = "Yes"
+
+    analysis["special_match"] = special
+    analysis["special_match_reasons"] = reasons
+    analysis["match_score"] = score
+    return analysis
 
 
 def _normalize_breakdown(section) -> Dict:
@@ -293,8 +414,13 @@ def _normalize_breakdown(section) -> Dict:
 
 def _analysis_fields(analysis: Dict) -> Dict:
     """Normalize AI analysis into the fields stored on job documents."""
+    reasons = analysis.get("special_match_reasons") or []
+    if not isinstance(reasons, list):
+        reasons = [str(reasons)] if reasons else []
     return {
         "recommendation": analysis.get("recommendation", ""),
+        "special_match": _as_bool(analysis.get("special_match")),
+        "special_match_reasons": [str(item).strip() for item in reasons if str(item).strip()],
         "disqualification_reason": analysis.get("disqualification_reason", ""),
         "match_reasons": analysis.get("match_reasons", []),
         "missing_requirements": analysis.get("missing_requirements", []),
@@ -387,12 +513,30 @@ def process_new_jobs(limit: Optional[int] = None, source: Optional[str] = None):
     
     matched_count = 0
     processed_count = 0
+    german_skip_count = 0
     
     for i, job in enumerate(new_jobs, 1):
         print(f"\n--- Processing job {i}/{total_jobs} ---")
         print(f"Title: {job.get('title')}")
         print(f"Company: {job.get('company')}")
         print(f"Source: {job.get('source')}")
+
+        german_reason = find_mandatory_german_requirement(job)
+        if german_reason:
+            print(f"🚫 Mandatory German — skip remaining matching")
+            print(f"   {german_reason}")
+            analysis = german_disqualification_analysis(german_reason)
+            processed_count += 1
+            german_skip_count += 1
+            analysis_fields = _analysis_fields(analysis)
+            mark_job_as_matched(
+                job.get("job_id"),
+                job.get("source"),
+                match_score=analysis.get("match_score", 1),
+                analysis=analysis_fields,
+            )
+            print("✗ Stopped at German gate; not sent to AI matcher")
+            continue
         
         # Analyze with AI
         analysis = analyze_job_with_ai(job, user_profile, criteria)
@@ -420,6 +564,10 @@ def process_new_jobs(limit: Optional[int] = None, source: Optional[str] = None):
         
         print(f"Match score: {match_score}/10")
         print(f"Recommendation: {recommendation}")
+        if analysis.get("special_match"):
+            reasons = analysis.get("special_match_reasons") or []
+            extra = f" ({', '.join(reasons[:3])})" if reasons else ""
+            print(f"★ Special Match{extra}")
         
         # Show disqualification reason if present
         if disqualification_reason:
@@ -460,6 +608,7 @@ def process_new_jobs(limit: Optional[int] = None, source: Optional[str] = None):
     
     print(f"\n=== Matching Complete ===")
     print(f"Processed: {processed_count}/{total_jobs}")
+    print(f"German gate skipped: {german_skip_count}")
     print(f"Matched: {matched_count}")
     print(f"Threshold: {MATCH_THRESHOLD}/10")
 

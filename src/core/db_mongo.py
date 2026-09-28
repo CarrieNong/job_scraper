@@ -411,6 +411,8 @@ def mark_job_as_matched(job_id, source, match_score=None, analysis=None):
     if analysis:
         update_data.update({
             "recommendation": analysis.get("recommendation", ""),
+            "special_match": bool(analysis.get("special_match")),
+            "special_match_reasons": analysis.get("special_match_reasons") or [],
             "disqualification_reason": analysis.get("disqualification_reason", ""),
             "match_reasons": analysis.get("match_reasons", []),
             "missing_requirements": analysis.get("missing_requirements", []),

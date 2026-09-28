@@ -441,6 +441,9 @@
     .job-grid.layout-compact .score-badge {
       width: 34px; height: 34px; font-size: .78rem; border-radius: 8px;
     }
+    .job-grid.layout-compact .special-match-badge {
+      font-size: .64rem; padding: 2px 7px;
+    }
     .job-grid.layout-compact .date-group-header {
       padding: 10px 2px 4px;
       margin-top: 6px;
@@ -472,6 +475,40 @@
     .score-hi  { color: #22c55e; border-color: #22c55e33; background: #22c55e10; }
     .score-mid { color: #f59e0b; border-color: #f59e0b33; background: #f59e0b10; }
     .score-lo  { color: #ef4444; border-color: #ef444433; background: #ef444410; }
+
+    .special-match-badge {
+      flex-shrink: 0;
+      font-size: .68rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      color: #1a1408;
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      border: 1px solid #d97706;
+      letter-spacing: .02em;
+      white-space: nowrap;
+      line-height: 1.3;
+    }
+    .card.special-match {
+      border-color: #f59e0b66;
+      box-shadow: 0 0 0 1px #f59e0b22;
+    }
+    .filter-special {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      padding: 7px 12px;
+      font-size: .82rem;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .filter-special.active {
+      color: #1a1408;
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      border-color: #d97706;
+    }
 
     /* Meta row */
     .card-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -848,6 +885,7 @@
     <button type="button" data-layout="cards" onclick="setLayout('cards')" title="Card layout">▦ Cards</button>
     <button type="button" data-layout="compact" onclick="setLayout('compact')" title="Compact list">☰ List</button>
   </div>
+  <button type="button" id="specialMatchFilter" class="filter-special" onclick="toggleSpecialMatchFilter()" title="Show special matches only">★ Special Match</button>
   <span class="count-label" id="countLabel"></span>
 </div>
 
@@ -862,6 +900,7 @@
 <script>
 /* ── State ───────────────────────────────────────────────────────── */
 let currentStatusFilter = 'all';
+let specialMatchOnly = false;
 let debounceTimer = null;
 let dateDebounceTimer = null;
 const collapsedGroups = new Set(); // tracks which date groups are collapsed
@@ -1086,6 +1125,12 @@ function setStatusFilter(status) {
   loadJobs();
 }
 
+function toggleSpecialMatchFilter() {
+  specialMatchOnly = !specialMatchOnly;
+  document.getElementById('specialMatchFilter').classList.toggle('active', specialMatchOnly);
+  loadJobs();
+}
+
 /* ── Debounce search ─────────────────────────────────────────────── */
 function debounceLoad() {
   clearTimeout(debounceTimer);
@@ -1185,6 +1230,15 @@ function renderBreakdown(title, section) {
     </details>`;
 }
 
+function specialMatchBadge(job) {
+  if (!job.special_match) return '';
+  const reasons = Array.isArray(job.special_match_reasons)
+    ? job.special_match_reasons.filter(Boolean).join(' · ')
+    : '';
+  const title = reasons ? ` title="${escHtml(reasons)}"` : '';
+  return `<span class="special-match-badge"${title}>★ Special Match</span>`;
+}
+
 /* ── Render card ─────────────────────────────────────────────────── */
 function renderCard(job) {
   const score  = (job.match_score || 0).toFixed(1);
@@ -1195,9 +1249,10 @@ function renderCard(job) {
   const matchReasons = hasBreakdown
     ? ''
     : (job.match_reasons || []).slice(0, 3).map(r => `<li>${escHtml(r)}</li>`).join('');
+  const specialBadge = specialMatchBadge(job);
 
   const card = document.createElement('div');
-  card.className = 'card';
+  card.className = 'card' + (job.special_match ? ' special-match' : '');
   card.id = `card-${job._id}`;
 
   card.innerHTML = `
@@ -1210,6 +1265,7 @@ function renderCard(job) {
       <div class="row-meta">
         ${job.location ? `<span class="row-loc" title="${escHtml(job.location)}">📍 ${escHtml(job.location)}</span>` : ''}
         <span class="meta-pill source-pill">${escHtml(job.source || '')}</span>
+        ${specialBadge}
         <span class="status-pill s-${status}" data-status-pill>${STATUS_LABEL[status] || status}</span>
         <div class="score-badge ${scoreCls(job.match_score || 0)}">${score}</div>
       </div>
@@ -1243,6 +1299,7 @@ function renderCard(job) {
       </div>
 
       <div class="card-meta">
+        ${specialBadge}
         <span class="meta-pill source-pill">${escHtml(job.source || '')}</span>
         ${job.matched_at ? `<span class="meta-pill">📅 ${job.matched_at}</span>` : ''}
         ${job.applicants ? `<span class="meta-pill">👥 ${escHtml(job.applicants)}</span>` : ''}
@@ -1298,6 +1355,7 @@ async function loadJobs() {
 
   const params = new URLSearchParams();
   if (currentStatusFilter !== 'all') params.set('status', currentStatusFilter);
+  if (specialMatchOnly) params.set('special_match', 'true');
   if (source !== 'all') params.set('source', source);
   if (search) params.set('q', search);
   if (dates.from) params.set('date_from', dates.from);

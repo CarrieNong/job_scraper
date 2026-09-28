@@ -41,7 +41,7 @@ _MIN_CHUNK_CHARS = 12
 # English JD. Only treat the posting as German above this share.
 GERMAN_SHARE_THRESHOLD = 0.20
 
-_SENTENCE_SPLIT = re.compile(r"(?<=[.!?。！？])\s+|\n+")
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
 
 # Restrict the model set to languages commonly seen on DE job boards.
 # Lingua is more accurate with a small candidate set than with all 75 languages.

@@ -107,6 +107,7 @@ def _fetch_todays_matched_jobs() -> list[dict]:
                 "job_id": 1,
                 "company": 1,
                 "status": 1,
+                "special_match": 1,
             },
         ).sort("match_score", -1)
     )
@@ -132,6 +133,8 @@ def _format_job_block(index: int, job: dict) -> str:
         f"⭐ {score_text}/10 · {source}",
         f"🏷 {status}",
     ]
+    if job.get("special_match"):
+        lines.insert(-1, "★ Special Match")
 
     link = _normalize_job_link(job)
     if link.startswith("http"):

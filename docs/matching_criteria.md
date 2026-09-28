@@ -1,290 +1,165 @@
 # Job Matching Criteria
 
-## ⚠️ CRITICAL: Hard Requirements (Immediate Disqualification)
+Score 0–10. Apply the steps in order. Each rule is stated once.
 
-**FIRST CHECK THESE - If ANY hard requirement is not met, assign match score ≤ 3 immediately and stop evaluation.**
+## Candidate
 
-### 1. Language Requirements - MANDATORY CHECK
-- ✅ **Must Have**: English (required)
-- ✅ **Native**: Chinese
-- Candidate does **not** speak German.
+- **Languages**: English (professional). Chinese (native). Does **not** speak German.
+- **Frontend**: 7 years with React, Angular, Vue, and strong vanilla JavaScript / ES6+. Also TypeScript, Tailwind, Next.js, Nuxt, Webpack, Vite.
+- **Backend**: 1 year full-stack in the Node.js ecosystem (Express, Nest, Fastify, Koa, TypeScript/JavaScript). A little Python — **not** enough when Python is the only / primary backend. Does **not** know Java, Go, PHP, Ruby, C#, .NET, Scala, Rust, or Kotlin as a backend.
+- **Also on resume**: MongoDB, Git, Sentry, Jest, Cypress, Playwright, AI-assisted development.
+- **Background**: B2B SaaS, B2C e-commerce, startups, and food compliance / regulatory. Consumer apps, admin tools, high-traffic work (3M+ daily views), UX, complex forms, roles and permissions, product-management UIs, component libraries / design systems, performance optimization.
 
-German-language postings are already filtered out before matching. Do **not** re-filter based on the JD being (or looking) German, and do **not** use keyword lists.
+## Step 1 — Hard gates
 
-**DISQUALIFY** only if the JD **explicitly states** that German is a mandatory job-language requirement (must-have / required / fluent / native / C1 for the role). An English JD can still do this in writing — only then disqualify.
+If **any** gate fails: `match_score` ≤ 3, `recommendation` **No**, `special_match` false. Do not apply bonuses or Special Match.
 
-**NEVER infer German from location or office.** These are **not** language requirements and must PASS:
-- Location fields such as "Berlin, Germany (On-site)", "Germany (Hybrid)", "DACH"
+The **German gate** also stops the rest of the evaluation: do not score stack, years, domain, or Special Match.
+
+### 1. German language (check first)
+
+German-language postings are already filtered out before matching. Do **not** re-filter because the JD looks German, and do **not** use keyword lists.
+
+**Fail** only if the JD **explicitly** states that German is a mandatory job language (must-have / required / fluent / native / C1 / B2+ for the role). An English JD can still do this in writing — only then fail.
+
+**Do not infer German from location or office.** These pass:
+
+- "Berlin, Germany (On-site)", "Germany (Hybrid)", "DACH"
 - "Berlin office", "in-person culture in Berlin", "office in Germany", public-transport / gym perks
-- Company being German, European, or based in Berlin / Munich / Hamburg
-- The JD being about a German/European market or German customers/brands
+- The company is German, European, or based in Berlin / Munich / Hamburg
+- The product serves a German/European market or German customers/brands
 
-**DO NOT disqualify if**:
-- German is "nice to have" / "plus" / "advantage" / "preferred"
-- German appears only in the company description, not as a job requirement
-- German is never mentioned as a language skill at all
+**Also pass** if German is only "nice to have" / "plus" / "advantage" / "preferred", appears only in the company description, or is never mentioned as a language skill. Do **not** invent a German requirement the JD never wrote.
 
-Do **not** invent "Fluency in German" (or similar) as a requirement if the JD never asked for it.
+### 2. Backend language
 
-### 2. Backend Language Requirements - MANDATORY CHECK
-Candidate backend:
-- ✅ **Strong / known**: Node.js ecosystem (Express.js, Nest.js, Fastify, Koa, etc.), TypeScript/JavaScript on the backend
-- ⚠️ **Light**: a little Python — **not** enough when Python is the **only** / primary backend
-- ❌ **Does not know**: Java, Go, PHP, Ruby, C#, .NET, Scala, Rust, Kotlin, etc. (and Python as a primary backend)
+**Fail** only if the JD's **only / clearly primary** mandatory backend is a language the candidate does not know (Python-only, Java-only, Go-only, and the others listed above), **and** Node.js / TypeScript-backend / JavaScript-backend is **not** an accepted or required option.
 
-**DISQUALIFY (score ≤ 3) ONLY if**:
-- The JD's **only** / **clearly primary** mandatory backend is a language the candidate does not know (e.g. Python-only, Java-only, Go-only), **AND**
-- Node.js / TypeScript-backend / JavaScript-backend is **not** listed as an accepted or required option
+**Do not fail** when a known backend and an unknown one are both required or both listed. These stay in scoring as approximate matches:
 
-**DO NOT DISQUALIFY — treat as approximate / reviewable match** if:
-- The JD lists **both** a known stack (Node.js / TypeScript / JavaScript backend) **and** an unknown one (Python, Java, Go, etc.) as required or as the tech stack
-- Examples that must PASS as approximate match (not ≤3):
-  - "Python, TypeScript, and modern web technologies"
-  - "Backend in Node.js or Python"
-  - "Experience with Python and/or Node.js"
-  - Full-stack with React + "Python / TypeScript"
-- In these cases: continue normal scoring for other skills. Put the unknown-language gap clearly in `red_flags`, `missing_requirements`, `what_theyre_looking_for.unmatched`, and `summary`. Recommendation **"Maybe"** (not hard No) when the unknown language is the main caveat.
-- **Floor rule**: if other required skills largely fit, final score must be **≥ 7.0** so the job is saved for human review. Do **not** apply a penalty that would drop the score below 7.0 — explain the gap in text fields instead of using a low score.
+- "Python, TypeScript, and modern web technologies"
+- "Backend in Node.js or Python"
+- "Experience with Python and/or Node.js"
+- Full-stack with React + "Python / TypeScript"
 
-**Also DO NOT DISQUALIFY if**:
-- No backend language is required
-- Backend is "nice to have" / "plus"
-- Frontend-focused role with optional backend
-- Required backend is Node.js / TypeScript / JavaScript only
-- Python (or another unknown language) is only mentioned as nice-to-have
+Put that gap in `red_flags`, `missing_requirements`, `what_theyre_looking_for.unmatched`, and `summary`. Recommendation **Maybe** when the unknown language is the main caveat. **Floor**: if the other required skills largely fit, the final score is **≥ 7.0**. Explain the gap in text; do not drop the score below 7.0 to represent it.
 
-### 3. Years of Experience - MANDATORY CHECK
-Candidate:
-- **7 years** professional frontend / software engineering
-- **1 year** full-stack / backend (Node.js)
+**Also do not fail** when no backend language is required, backend is nice-to-have, the role is frontend-focused with optional backend, the required backend is Node.js / TypeScript / JavaScript only, or the unknown language is only nice-to-have.
 
-**DISQUALIFY** if a **must-have** requirement asks for more years than the candidate has in that dimension:
-- Overall / frontend / software experience required **> 7 years**
-- Backend-specific experience required **> 1 year** (a range that includes 1, e.g. "1-2 years", PASSES)
+### 3. Years of experience
 
-Do **not** disqualify on the title "Senior" alone if the stated year requirement is within range.
-Nice-to-have year requirements do not disqualify.
+**Fail** if a **must-have** asks for more years than the candidate has in that dimension:
 
-### 4. DevOps/Operations Requirements - MANDATORY CHECK
-❌ **DISQUALIFY if**:
-- Job title includes "DevOps", "SRE", or "Infrastructure"
-- JD explicitly requires "DevOps experience required", "SRE experience mandatory"
-- Heavy infrastructure/operations listed as core responsibility (>50% of job)
+- Overall / frontend / software **> 7 years**
+- Backend-specific **> 1 year**. A range that includes 1 (for example "1–2 years") **passes**.
 
-✅ **Proceed if**:
-- DevOps/SRE listed as "nice to have" or "plus"
-- Basic CI/CD, Docker, Git mentioned (these are acceptable)
-- No explicit DevOps requirement
+Do not fail on the title "Senior" alone when the stated years are in range. Nice-to-have year requirements do not fail this gate. A Staff / Principal title with no excess year requirement does not fail it either.
 
----
+### 4. DevOps / operations
 
-## Evaluation Process (After Hard Requirements)
+**Fail** if the title includes DevOps, SRE, or Infrastructure; the JD says DevOps or SRE experience is required / mandatory; or infrastructure / operations is a core responsibility (more than half the job).
 
-Base scoring uses **only** skills explicitly marked as "required", "mandatory", or "must have" in the JD. Nice-to-have skills never reduce the base score.
+**Pass** if DevOps/SRE is only nice-to-have, the JD only mentions basic CI/CD, Docker, or Git, or there is no explicit DevOps requirement.
 
----
+## Step 2 — Ordinary score
 
-## Technical Stack Matching
+Skip this step if a hard gate failed. The base score uses **only** skills marked required / mandatory / must-have. Missing nice-to-have skills never reduce it.
 
-### Frontend Frameworks (High Priority) ✅
-**Core Competencies**: React, Angular, Vue (7 years experience); strong vanilla JavaScript / ES6+ foundation throughout.
+### Base score
 
-- **Full Match**: If JD requires ANY of these:
-  - **React ecosystem**: React, Next.js, Redux, React Query, Zustand, React Router, etc.
-  - **Vue ecosystem**: Vue, Nuxt.js, Vuex, Pinia, Vue Router, etc.
-  - **Angular ecosystem**: Angular, RxJS, NgRx, Angular Material, etc.
-  - **Shared tools**: TypeScript, JavaScript, Tailwind CSS, CSS-in-JS, Webpack, Vite, etc.
-  - **Vanilla / framework-agnostic JS roles**: If the JD primarily requires JavaScript/ES6+ skills (vanilla JS, DOM manipulation, browser APIs) rather than a specific proprietary framework, treat this as a FULL match — the candidate has 7 years of JavaScript development including vanilla JS.
+- **8**: 90%+ of required skills match, and Special Match A/B/C does not apply
+- **7**: 70–89% match
+- **6**: 50–69% match
+- **5**: 40–49% match
+- **4**: 30–39% match
 
-- **Partial Match (treat as Good Match, ~7 points base)**: If JD uses a less common or legacy frontend framework (CanJS, Backbone, Ember, Knockout, Mootools, etc.) but:
-  - Also lists React, Angular, Vue, or similar as reference keywords or "similar technologies", OR
-  - The primary requirement is strong JavaScript / frontend engineering skill (framework is secondary / learnable)
-  → Do NOT disqualify or heavily penalize. The candidate's 7 years of React/Vue/Angular + vanilla JS demonstrates framework-agnostic frontend engineering ability. These frameworks share the same JS foundations and are learnable. Score based on how well other requirements (JS depth, Node.js, CSS, architecture, etc.) match — framework gap is at most a minor deduction (-0.5 to -1 point), not a disqualifier.
+### Frontend
 
-- **Note on build tools**: Grunt/Gulp experience is NOT required — but the candidate's Webpack/Vite/npm-scripts experience covers the same responsibility (frontend build tooling). Do NOT penalize for Grunt/Gulp mismatch; treat as equivalent skill.
-- **Note on test frameworks**: Jest / Cypress / Playwright ≈ Mocha / Chai for scoring. Do NOT deduct for this difference.
+**Full match** if the required frontend is any of:
 
-### Backend Experience Level ✅
-**Actual Experience**: 1 year of full-stack/backend with Node.js
+- React ecosystem: React, Next.js, Redux, React Query, Zustand, React Router, and similar
+- Vue ecosystem: Vue, Nuxt, Vuex, Pinia, Vue Router, and similar
+- Angular ecosystem: Angular, RxJS, NgRx, Angular Material, and similar
+- TypeScript, JavaScript, Tailwind, CSS-in-JS, Webpack, Vite
+- Vanilla / framework-agnostic JavaScript as the primary ask (vanilla JS, DOM, browser APIs)
 
-- **Match Requirements**:
-  - ✅ If backend requires: "1 year", "1-2 years", or no specific years mentioned
-  - ❌ DISQUALIFY if a must-have asks for more than 1 year of backend experience
-  - ❌ DISQUALIFY if overall/frontend must-have years > 7
+**Partial match** if the framework is a less common or legacy one (CanJS, Backbone, Ember, Knockout, MooTools, and similar) and either the JD also lists React, Angular, Vue, or "similar" technologies, or strong JavaScript is the real requirement and the framework is secondary. Do not disqualify. Start from a base around 7 and deduct at most 0.5–1 for the framework gap. A named legacy framework is not Special Match A.
 
-### Other Technology Stack
-**Resume Skills**: MongoDB, Git, Webpack, Vite, Sentry, Jest, Cypress, Playwright, AI tools
+**No deduction** for these equivalents: Webpack / Vite / npm scripts ≈ Grunt / Gulp. Jest / Cypress / Playwright ≈ Mocha / Chai.
 
-- **ONLY penalize** if JD explicitly requires as "mandatory":
-  - Specialized databases: Oracle, SQL Server, DB2 (not on resume)
-  - Specialized frameworks: Hadoop, Spark, Kafka (not on resume)
-  - Niche technologies outside web development
+### Other required technologies
 
-- **Do NOT penalize** if:
-  - Listed as "nice to have" or "bonus"
-  - Related to existing skills (e.g., PostgreSQL is related to MongoDB)
-  - Common web dev tools (e.g., Redis, GraphQL)
+Deduct inside the base score **only** when the JD makes one of these mandatory and it is not on the resume:
 
----
+- Specialized databases and enterprise stacks: Oracle, SQL Server, DB2, SAP, mainframe
+- Specialized data systems: Hadoop, Spark, Kafka
+- Niche technology outside web development
 
-## Experience Level & Role Matching
+Do **not** deduct for nice-to-have items, close neighbors (PostgreSQL next to MongoDB), or common web tools (Redis, GraphQL).
 
-### Total Experience ✅
-- **7 years** frontend engineering experience
-- **1 year** full-stack development experience
-- Previous: B2B SaaS, B2C e-commerce, startup environments
+### Bonuses
 
-### Position Level Match:
-- **High Match (8-10)**: Junior to Senior Frontend Developer, Full-Stack Developer (Frontend-focused), JavaScript Developer (vanilla JS / framework-agnostic)
-- **Medium Match (5-7)**: Senior Full-Stack Developer (if backend is Node.js or not emphasized), Frontend roles using legacy/niche frameworks where JS fundamentals are the core requirement
-- **Low Match (≤4)**: 
-  - Staff/Principal Engineer requiring 10+ years
-  - Backend-focused positions (>70% backend work)
-  - Positions requiring 5+ years in specific backend technologies
+Add these only for an ordinary match. Special Match replaces the score in Step 3 instead of stacking them. After bonuses, cap an ordinary score at **8.0**.
 
----
+Nice-to-have / plus / bonus / preferred — add only skills the candidate **has**, never subtract for ones they lack:
 
-## Business Domain & Project Type Matching
+- +0.5 for 1–2 skills
+- +1.0 for 3–4
+- +1.5 for 5+
+- +2.0 for most or all
 
-### Strong Domain Experience ✅
-**Boost match score** if JD mentions:
-- **E-commerce**: Online shopping, retail, marketplace, product catalog
-- **SaaS**: B2B platforms, subscription services
-- **Consumer-facing (C-side)**: User applications, customer portals
-- **Admin systems (B-side)**: Management dashboards, internal tools
-- **Food compliance/regulatory**: Food industry, compliance systems
+Typical nice-to-haves: an extra language, non-required DevOps, a cloud certification, a test tool beyond Jest/Cypress, Figma or Sketch, a project-management tool, unrelated domain knowledge.
 
-### Relevant Project Experience:
-- User experience optimization
-- Complex form handling and validation
-- Multi-user role and permission systems
-- Product management interfaces
-- High-traffic applications (3M+ daily views)
+Domain:
 
----
+- +1.0 for e-commerce, SaaS, or food compliance
+- +0.5 for a related domain
+- +0 for an unrelated domain
 
-## "Nice to Have" Skills Evaluation
+Also treat these as positive fit when the JD asks for them (they use the bonuses above, not a separate score): component libraries or design systems, performance optimization, AI-assisted development, English plus remote, startup or scale-up.
 
-**CRITICAL**: "Nice to have" / "Plus" / "Bonus" / "Preferred" skills should:
-- ✅ **Add small bonus (+0.5 to +1.5 points)** if candidate HAS the skill
-- ➖ **Add ZERO penalty** if candidate DOES NOT have the skill
-- **Do NOT reduce base match score** for missing nice-to-have skills
+## Step 3 — Special Match (9–10)
 
-### Examples of Nice to Have (No Penalty if Missing):
-- Additional programming languages
-- DevOps tools (if not required)
-- Cloud certifications
-- Specific testing frameworks beyond Jest/Cypress
-- Design tools (Figma, Sketch)
-- Project management tools
-- Domain knowledge outside core experience
+If A, B, or C matches, set `special_match: true`, fill `special_match_reasons`, and **replace** the score with **9.0**. Do not leave these at 8. Otherwise `special_match: false` and `special_match_reasons: []`.
 
----
+Do not be conservative on A/B/C. Hard gates override this step. If a gate in Step 1 already failed, do not apply A, B, or C.
 
-## Scoring Instructions for AI
+### A. Pure frontend, stack matches → 9.0
 
-### 1. Hard Requirements Check (DISQUALIFY = Score ≤ 3)
-1. ❌ German is an **explicitly written** mandatory job-language requirement? → DISQUALIFY. Location/office in Germany or Berlin is NOT enough.
-2. ❌ Backend language: **only** an unknown stack is mandatory (Python-only / Java-only / Go-only, etc.) with **no** Node.js / TypeScript / JS backend option? → DISQUALIFY. If unknown language **and** known language both appear → do **not** disqualify; apply the mixed-stack floor (≥ 7.0 when other skills largely fit) and explain the gap.
-3. ❌ Must-have years of experience exceed candidate years (7 frontend / 1 backend)? → DISQUALIFY
-4. ❌ DevOps/SRE required as core role? → DISQUALIFY
+- The role is frontend-only (Frontend Developer / Engineer, UI Engineer, JavaScript Developer). Not backend-heavy (more than about 70% backend work), not DevOps/SRE.
+- The required frontend stack fully matches: React and/or Vue and/or Angular and/or TypeScript/JavaScript. Next.js, Nuxt, Redux, and the rest of those ecosystems count. Vanilla-JS frontend roles count.
+- There is no sole mandatory backend in an unknown language.
 
-**If any hard requirement fails, assign score ≤ 3 and provide clear reason.**
+### B. Junior fullstack + Node.js → 9.0
 
----
+- Junior / entry / working-student fullstack, or fullstack with **≤ 2 years** required (or no years stated). The title is not Senior / Lead / Staff / Principal.
+- The backend is Node.js / TypeScript / JavaScript (Express, Nest, Fastify, Koa, and similar).
 
-### 2. Required Skills Match (Base Score: 4-8)
-Evaluate ONLY "required" or "mandatory" skills:
+This still has to pass Step 1. A must-have of more than 1 year of backend fails the years gate and never reaches this category. "1–2 years" of backend still passes that gate.
 
-**Scoring Rubric**:
-- **8 points**: 90%+ required skills match
-  - Frontend framework matches perfectly
-  - Experience level matches
-  - All required tech stack present or highly related
-  
-- **7 points**: 70-89% required skills match
-  - Frontend matches, minor gaps in secondary skills
-  
-- **6 points**: 50-69% required skills match
-  - Frontend matches but significant secondary gaps
-  
-- **5 points**: 40-49% required skills match
-- **4 points**: 30-39% required skills match
+### C. Frontend-leaning fullstack with no hard JD constraints → 9.0
 
----
+All of the following must be true:
 
-### 3. Nice to Have Bonus (+0 to +2)
-**ONLY ADD** points for nice-to-have skills candidate HAS:
-- +0.5 points: Has 1-2 nice-to-have skills
-- +1.0 points: Has 3-4 nice-to-have skills
-- +1.5 points: Has 5+ nice-to-have skills
-- +2.0 points: Has most/all nice-to-have skills
+- The role is fullstack but frontend-leaning (**>50%** UI / frontend).
+- The JD does **not** hard-require a number of years ("must have N years", "N+ years required").
+- The JD does **not** hard-require a specific backend language (no "must know Java / Python / Go / PHP / …"). Backend is optional, unspecified, or only nice-to-have.
+- The JD does **not** require German as a must-have job language.
 
-**NEVER SUBTRACT** points for missing nice-to-have skills.
+If the JD hard-requires years, a specific backend language, or German, do **not** use C. Those jobs are ordinary matches or hard fails, not Special Matches.
 
----
+### Leipzig
 
-### 4. Domain/Business Fit Bonus (+0 to +1)
-- +1.0: Perfect domain match (e-commerce, SaaS, food compliance)
-- +0.5: Related domain match
-- +0: Neutral/unrelated domain
+Only on top of A, B, or C. If the location or the JD clearly places the job in **Leipzig** (including "Leipzig, Germany", "04103", "Leipzig (hybrid)", Leipzig-Halle):
 
----
+- Add **+0.5 to +1.0**, cap **10.0**
+- Include `"Located in Leipzig"` in `special_match_reasons`
 
-### Final Score Range:
-- **0-3**: Disqualified (hard requirements not met)
-- **4-6**: Weak match (many required skills missing)
-- **7-8**: Good match (most required skills present) — also used for mixed-stack approximate matches held for human review
-- **9-10**: Excellent match (all required + many nice-to-have)
+A perfect React frontend role in Leipzig should be **9.5–10**, not 8.
 
----
+## Score bands
 
-## Red Flags (Automatic Low Match)
-
-- ❌ German language **explicitly** mandatory in the JD (nice-to-have German is OK; Berlin/Germany location alone is NOT a red flag)
-- ❌ Backend-heavy roles (>70% backend) with **only** a non-Node.js stack (no Node/TS/JS option) → hard fail
-- ⚠️ Mixed backend stack (e.g. Python + TypeScript/Node): **not** a hard fail — flag in `red_flags` / summary as approximate match for human review
-- ❌ Must-have years exceed candidate years (7 frontend / 1 backend)
-- ❌ 5+ years backend experience explicitly required
-- ❌ Heavy DevOps/infrastructure as core responsibility
-- ❌ Enterprise legacy tech stacks explicitly required (Oracle, SAP, Mainframe)
-- ❌ Highly specialized niche technologies required (Hadoop, Spark, specialized systems)
-- ❌ Staff/Principal level requiring 10+ years experience
-
----
-
-## Strong Fit Indicators (Boost Score)
-
-- ✅ Frontend-focused or frontend-heavy (>60%) full-stack roles
-- ✅ Modern JavaScript/TypeScript stack (React/Vue/Angular)
-- ✅ Vanilla JS / framework-agnostic JavaScript developer roles (candidate has 7 years of JS)
-- ✅ Roles where primary skill is "strong JavaScript" even if framework is niche/legacy (CanJS, Backbone, etc.)
-- ✅ Node.js backend (if backend required)
-- ✅ Component library or design system work
-- ✅ Performance optimization focus
-- ✅ E-commerce or SaaS products
-- ✅ Consumer-facing applications or admin dashboards
-- ✅ AI-assisted development mentioned
-- ✅ English + remote work options
-- ✅ Startup or scale-up environment
-
----
-
-## Summary for AI Matcher
-
-**Evaluation Order**:
-1. **Hard Requirements Check First** → Fail any = Score ≤ 3
-2. **Required Skills Match** → Calculate base score (4-8)
-3. **Nice to Have Bonus** → Add bonus ONLY for skills present (0-2)
-4. **Domain Fit Bonus** → Add bonus for domain match (0-1)
-5. **Final Score** → Sum all components (max 10)
-
-**Key Principles**:
-- Be STRICT on hard requirements (explicit mandatory German only — never infer from Berlin/Germany location; years of experience; DevOps; backend **only** when the sole mandatory backend is unknown with no Node/TS/JS option)
-- Mixed backend stacks (known + unknown language) → approximate match for human review (≥ 7.0 when other skills largely fit), recommendation Maybe — not auto-reject
-- Focus on REQUIRED skills only for base scoring
-- NEVER penalize missing "nice to have" skills
-- DO reward having "nice to have" skills with modest bonus
-- Prioritize frontend-focused roles
-- Consider overall role balance (frontend vs backend split)
-- Equivalence for scoring: Webpack/Vite ≈ Grunt/Gulp; Jest/Cypress/Playwright ≈ Mocha/Chai
+- **0–3**: A hard gate failed
+- **4–6**: Weak ordinary match
+- **7–8**: Good ordinary match, including mixed-stack jobs held for review. Stay here when A/B/C do not apply.
+- **9–10**: Special Match only. Leipzig jobs sit at the top of this band.

@@ -216,6 +216,9 @@
     .job-grid.layout-compact .score-badge {
       width: 34px; height: 34px; font-size: .78rem; border-radius: 8px;
     }
+    .job-grid.layout-compact .special-match-badge {
+      font-size: .64rem; padding: 2px 7px;
+    }
     .job-grid.layout-compact .date-group-header {
       padding: 10px 2px 4px;
       margin-top: 6px;
@@ -245,6 +248,21 @@
     .score-hi  { color: #22c55e; border-color: #22c55e33; background: #22c55e10; }
     .score-mid { color: #f59e0b; border-color: #f59e0b33; background: #f59e0b10; }
     .score-lo  { color: #ef4444; border-color: #ef444433; background: #ef444410; }
+
+    .special-match-badge {
+      flex-shrink: 0;
+      font-size: .68rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      color: #1a1408;
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      border: 1px solid #d97706;
+      letter-spacing: .02em;
+      white-space: nowrap;
+      line-height: 1.3;
+    }
+    .card.special-match { border-color: #f59e0b66; }
 
     .card-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .meta-pill {
@@ -709,9 +727,16 @@ function renderCard(job) {
   const userStatus = job.user_status || '';
   const statusLabel = userStatus === 'watchlist' ? 'Can Apply' : 'Unmatched';
   const statusCls = userStatus === 'watchlist' ? 's-watchlist' : 's-unmatched';
+  const specialBadge = job.special_match
+    ? `<span class="special-match-badge"${
+        Array.isArray(job.special_match_reasons) && job.special_match_reasons.length
+          ? ` title="${escHtml(job.special_match_reasons.join(' · '))}"`
+          : ''
+      }>★ Special Match</span>`
+    : '';
 
   const card = document.createElement('div');
-  card.className = 'card';
+  card.className = 'card' + (job.special_match ? ' special-match' : '');
   card.innerHTML = `
     <div class="card-row" onclick="toggleCardExpand(this)">
       <span class="row-chevron">▸</span>
@@ -722,6 +747,7 @@ function renderCard(job) {
       <div class="row-meta">
         ${job.location ? `<span class="row-loc" title="${escHtml(job.location)}">📍 ${escHtml(job.location)}</span>` : ''}
         <span class="meta-pill source-pill">${escHtml(job.source || '')}</span>
+        ${specialBadge}
         <span class="status-pill ${statusCls}" data-status-pill>${statusLabel}</span>
         <div class="score-badge ${scoreCls(score)}">${score.toFixed(1)}</div>
       </div>
@@ -737,6 +763,7 @@ function renderCard(job) {
       </div>
 
       <div class="card-meta">
+        ${specialBadge}
         <span class="meta-pill source-pill">${escHtml(job.source || '')}</span>
         ${job.matched_at ? `<span class="meta-pill">📅 ${escHtml(job.matched_at)}</span>` : ''}
         ${job.recommendation ? `<span class="meta-pill">${escHtml(job.recommendation)}</span>` : ''}

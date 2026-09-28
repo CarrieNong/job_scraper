@@ -33,6 +33,8 @@ _AI_FIELDS = [
     "matched_at",
     "match_score",
     "recommendation",
+    "special_match",
+    "special_match_reasons",
     "disqualification_reason",
     "match_reasons",
     "missing_requirements",
