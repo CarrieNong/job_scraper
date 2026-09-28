@@ -34,9 +34,6 @@ from core.scraper_utils import (
     connect_browser,
     open_scraper_page,
     goto_page,
-    is_title_excluded,
-    detect_job_detail_language,
-    safe_text,
 )
 
 # Re-use the core scraping helpers from the standard LinkedIn scraper

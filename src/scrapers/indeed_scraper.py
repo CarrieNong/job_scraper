@@ -28,7 +28,7 @@ from core.scraper_utils import (
     parse_args,
     connect_browser,
     open_scraper_page,
-    is_title_excluded,
+    should_skip_title_before_click,
     detect_job_detail_language,
     strip_html,
 )
@@ -153,8 +153,11 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
                 print(f"Job {index + 1}: could not extract job_id, skip")
                 continue
 
-            if is_title_excluded(title):
-                print(f"Job {index + 1}: title excluded by filter, skip → {title}")
+            skip, reason = should_skip_title_before_click(title)
+            if skip:
+                if "AI judged unrelated" in reason:
+                    increment_scraper_stat("ai_title_filtered")
+                print(f"Job {index + 1}: {reason}, skip → {title}")
                 continue
 
             if is_job_id_exists(job_id, SOURCE):

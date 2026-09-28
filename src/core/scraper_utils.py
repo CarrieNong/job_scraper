@@ -4,6 +4,8 @@ Provides common functionality for browser automation, delays, and data extractio
 """
 import argparse
 import html as html_module
+import json
+import os
 import random
 import re
 import socket
@@ -25,6 +27,9 @@ from core.config import (
 
 # Pre-compile all exclusion patterns once for efficiency (case-insensitive)
 _EXCLUDE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in TITLE_EXCLUDE_KEYWORDS]
+
+# Normalize hyphens/underscores so "full-stack" matches "Full Stack"
+_KEYWORD_SPLIT = re.compile(r"[-_\s]+")
 
 # Too little text to classify reliably (failed/empty detail panels).
 _MIN_LANG_CHARS = 40
@@ -61,6 +66,119 @@ def is_title_excluded(title: str) -> bool:
         if pattern.search(title):
             return True
     return False
+
+
+def _normalize_title_text(text: str) -> str:
+    """Lowercase and collapse hyphens/underscores/spaces for keyword matching."""
+    return _KEYWORD_SPLIT.sub(" ", (text or "").lower()).strip()
+
+
+def title_matches_default_keywords(title: str, keywords=None) -> bool:
+    """
+    Return True if the title contains any DEFAULT_KEYWORDS term
+    (hyphen/space insensitive, e.g. full-stack ≈ fullstack ≈ full stack).
+    """
+    if not title:
+        return False
+    normalized_title = _normalize_title_text(title)
+    # Also check a no-space form so "fullstack" matches "full stack"
+    compact_title = normalized_title.replace(" ", "")
+    for kw in keywords if keywords is not None else DEFAULT_KEYWORDS:
+        normalized_kw = _normalize_title_text(kw)
+        if not normalized_kw:
+            continue
+        if normalized_kw in normalized_title:
+            return True
+        if normalized_kw.replace(" ", "") in compact_title:
+            return True
+    return False
+
+
+def is_title_relevant_by_ai(title: str, keywords=None) -> bool:
+    """
+    Ask AI whether a job title is related to the target roles in DEFAULT_KEYWORDS.
+
+    Used when the title already passed TITLE_EXCLUDE_KEYWORDS but does not
+    contain any DEFAULT_KEYWORDS term. Returns True if related (safe to click).
+
+    On missing API key or API failure, returns True (fail open) so potentially
+    good jobs are not dropped due to transient errors.
+    """
+    if not title:
+        return False
+
+    target_keywords = keywords if keywords is not None else DEFAULT_KEYWORDS
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        print("⚠ OPENAI_API_KEY missing; allowing click for title without keyword match")
+        return True
+
+    roles = ", ".join(target_keywords)
+    prompt = f"""You screen job titles before opening the posting.
+
+Target roles (keywords): {roles}
+
+Job title: {title}
+
+Is this title plausibly related to any of the target roles above?
+Related examples: Software Developer, Frontend Developer, Full Stack Developer,
+Web Engineer, GenAI Engineer, Product-minded Software Engineer, React Developer.
+Unrelated examples: unrelated domains or roles not in the target list.
+
+Respond ONLY with valid JSON:
+{{"relevant": true/false, "reason": "<one short sentence>"}}
+"""
+    try:
+        from openai import OpenAI
+
+        client = OpenAI(api_key=api_key)
+        model = os.getenv("AI_MODEL", "gpt-4o-mini")
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You classify job titles against a fixed list of target "
+                        "software roles. Be inclusive of close synonyms "
+                        "(developer ≈ engineer, fullstack ≈ full-stack) but "
+                        "reject clearly unrelated titles. Respond only with JSON."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0,
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content or "{}")
+        relevant = bool(result.get("relevant", False))
+        reason = (result.get("reason") or "").strip()
+        verdict = "relevant" if relevant else "unrelated"
+        print(f"  AI title check: {verdict}" + (f" — {reason}" if reason else ""))
+        return relevant
+    except Exception as e:
+        print(f"⚠ AI title relevance check failed ({e}); allowing click")
+        return True
+
+
+def should_skip_title_before_click(title: str) -> tuple:
+    """
+    Pre-click title gate.
+
+    1. TITLE_EXCLUDE_KEYWORDS match → skip
+    2. Contains a DEFAULT_KEYWORDS term → click
+    3. Otherwise ask AI; skip only when AI says unrelated
+
+    Returns:
+        (should_skip: bool, reason: str)
+    """
+    if is_title_excluded(title):
+        return True, "title excluded by filter"
+    if title_matches_default_keywords(title):
+        return False, "matches DEFAULT_KEYWORDS"
+    if is_title_relevant_by_ai(title):
+        return False, "AI judged relevant to target roles"
+    return True, "AI judged unrelated to target roles"
 
 
 def _get_language_detector():

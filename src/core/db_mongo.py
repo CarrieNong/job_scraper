@@ -236,6 +236,8 @@ def increment_scraper_stat(key: str, amount: int = 1) -> None:
     ---------------
     title_passed_clicked  – jobs that passed the title filter and were new
                             (i.e. we actually clicked into the detail page)
+    ai_title_filtered     – titles without DEFAULT_KEYWORDS that AI judged
+                            unrelated to target roles (skipped before click)
     german_filtered       – detail pages detected as German and skipped
     """
     db = get_db()
