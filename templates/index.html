@@ -114,6 +114,125 @@
       padding: 0 2px; flex-shrink: 0;
     }
 
+    /* ── Activity calendar heatmap ────────────────────────────────── */
+    .cal-section {
+      padding: 18px 24px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .cal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .cal-title {
+      font-size: .88rem; font-weight: 700;
+      color: var(--text); letter-spacing: .02em;
+    }
+    .cal-title span { color: var(--muted); font-weight: 500; margin-left: 8px; }
+    .cal-legend {
+      display: flex; align-items: center; gap: 6px;
+      font-size: .72rem; color: var(--muted);
+    }
+    .cal-legend .swatch {
+      width: 12px; height: 12px; border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+    .cal-body {
+      display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;
+    }
+    .cal-wrap {
+      display: flex; gap: 6px; overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .cal-dow {
+      display: grid;
+      grid-template-rows: 16px repeat(7, 14px);
+      gap: 3px;
+      font-size: .65rem; color: var(--muted);
+      padding-right: 4px;
+      flex-shrink: 0;
+    }
+    .cal-dow span {
+      display: flex; align-items: center; height: 14px; line-height: 1;
+    }
+    .cal-dow .spacer { height: 16px; }
+    .cal-months {
+      display: flex; gap: 3px;
+    }
+    .cal-month-col {
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .cal-month-label {
+      height: 16px; font-size: .65rem; color: var(--muted);
+      line-height: 16px; white-space: nowrap;
+      overflow: hidden;
+    }
+    .cal-week {
+      display: grid;
+      grid-template-rows: repeat(7, 14px);
+      gap: 3px;
+    }
+    .cal-cell {
+      width: 14px; height: 14px;
+      border-radius: 3px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: outline .12s, transform .12s;
+      padding: 0;
+    }
+    .cal-cell.empty {
+      background: transparent; border-color: transparent; cursor: default;
+    }
+    .cal-cell:not(.empty):hover,
+    .cal-cell.selected {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+      transform: scale(1.15);
+      z-index: 1;
+    }
+    .cal-cell.l0 { background: #1a1d27; }
+    .cal-cell.l1 { background: #1e3a5f; border-color: #1e3a5f; }
+    .cal-cell.l2 { background: #2563eb66; border-color: #2563eb88; }
+    .cal-cell.l3 { background: #3b82f6; border-color: #3b82f6; }
+    .cal-cell.l4 { background: #6c8cff; border-color: #6c8cff; }
+
+    .cal-detail {
+      flex: 1; min-width: 220px; max-width: 320px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .cal-detail-date {
+      font-size: .82rem; font-weight: 700;
+      color: var(--text); margin-bottom: 10px;
+    }
+    .cal-detail-date.muted { color: var(--muted); font-weight: 500; }
+    .cal-metrics {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    }
+    .cal-metric {
+      background: var(--surface2);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .cal-metric .m-num {
+      font-size: 1.15rem; font-weight: 700; line-height: 1.1;
+    }
+    .cal-metric .m-label {
+      font-size: .68rem; color: var(--muted); margin-top: 3px;
+    }
+    .cal-metric.m-clicked .m-num { color: var(--accent); }
+    .cal-metric.m-german  .m-num { color: #ef4444; }
+    .cal-metric.m-matched .m-num { color: #f59e0b; }
+    .cal-metric.m-applied .m-num { color: var(--applied); }
+
+    @media (max-width: 640px) {
+      .cal-detail { max-width: none; width: 100%; }
+    }
+
     /* ── Toolbar ──────────────────────────────────────────────────── */
     .toolbar {
       display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
@@ -593,7 +712,7 @@
   <div class="header-actions">
     <a class="nav-btn" href="/manual-apply">✍️ Log Applied</a>
     <a class="nav-btn" href="/unmatched">Unmatched Jobs <b id="unmatchedNavCount"></b></a>
-    <button id="refreshBtn" class="btn-save" onclick="loadJobs()" style="padding:6px 14px;font-size:.82rem;">↻ Refresh</button>
+    <button id="refreshBtn" class="btn-save" onclick="refreshAll()" style="padding:6px 14px;font-size:.82rem;">↻ Refresh</button>
   </div>
 </header>
 
@@ -616,7 +735,59 @@
   <div class="funnel-sep">▸</div>
   <div class="funnel-step f-applied">
     <div class="funnel-num" id="f-applied">–</div>
-    <div class="funnel-label">Applied</div>
+    <div class="funnel-label">Applied · Incl. Rejected</div>
+  </div>
+</div>
+
+<!-- ── Activity calendar heatmap ───────────────────────────────────── -->
+<div class="cal-section" id="calSection">
+  <div class="cal-header">
+    <div class="cal-title">Daily Activity <span>last 17 weeks</span></div>
+    <div class="cal-legend">
+      Less
+      <span class="swatch l0" style="background:#1a1d27"></span>
+      <span class="swatch" style="background:#1e3a5f"></span>
+      <span class="swatch" style="background:#2563eb66"></span>
+      <span class="swatch" style="background:#3b82f6"></span>
+      <span class="swatch" style="background:#6c8cff"></span>
+      More
+    </div>
+  </div>
+  <div class="cal-body">
+    <div class="cal-wrap">
+      <div class="cal-dow" aria-hidden="true">
+        <span class="spacer"></span>
+        <span></span>
+        <span>Mon</span>
+        <span></span>
+        <span>Wed</span>
+        <span></span>
+        <span>Fri</span>
+        <span></span>
+      </div>
+      <div class="cal-months" id="calMonths"></div>
+    </div>
+    <div class="cal-detail" id="calDetail">
+      <div class="cal-detail-date muted" id="calDetailDate">Hover or click a day</div>
+      <div class="cal-metrics">
+        <div class="cal-metric m-clicked">
+          <div class="m-num" id="cd-clicked">–</div>
+          <div class="m-label">Title Clicked</div>
+        </div>
+        <div class="cal-metric m-german">
+          <div class="m-num" id="cd-german">–</div>
+          <div class="m-label">German Filtered</div>
+        </div>
+        <div class="cal-metric m-matched">
+          <div class="m-num" id="cd-matched">–</div>
+          <div class="m-label">AI Matched</div>
+        </div>
+        <div class="cal-metric m-applied">
+          <div class="m-num" id="cd-applied">–</div>
+          <div class="m-label">Applied (incl. rejected)</div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -766,6 +937,144 @@ async function loadStats() {
       document.getElementById('f-applied').textContent = data.funnel.applied;
     }
   } catch (_) {}
+}
+
+/* ── Activity calendar heatmap ───────────────────────────────────── */
+let calDaysByDate = {};
+let calSelectedDate = null;
+
+function calActivityScore(d) {
+  return (d.title_clicked || 0) + (d.ai_matched || 0) + (d.applied || 0);
+}
+
+function calLevel(score, maxScore) {
+  if (!score || maxScore <= 0) return 0;
+  const r = score / maxScore;
+  if (r <= 0.25) return 1;
+  if (r <= 0.5)  return 2;
+  if (r <= 0.75) return 3;
+  return 4;
+}
+
+function showCalDetail(dateStr) {
+  const d = calDaysByDate[dateStr];
+  if (!d) return;
+  calSelectedDate = dateStr;
+  document.querySelectorAll('.cal-cell.selected').forEach(el => el.classList.remove('selected'));
+  const cell = document.querySelector(`.cal-cell[data-date="${dateStr}"]`);
+  if (cell) cell.classList.add('selected');
+
+  const today = formatDate(new Date());
+  let label = dateStr;
+  if (dateStr === today) label = `Today · ${dateStr}`;
+  else {
+    const yd = new Date(); yd.setDate(yd.getDate() - 1);
+    if (dateStr === formatDate(yd)) label = `Yesterday · ${dateStr}`;
+  }
+  document.getElementById('calDetailDate').textContent = label;
+  document.getElementById('calDetailDate').classList.remove('muted');
+  document.getElementById('cd-clicked').textContent = d.title_clicked;
+  document.getElementById('cd-german').textContent  = d.german_filtered;
+  document.getElementById('cd-matched').textContent = d.ai_matched;
+  document.getElementById('cd-applied').textContent = d.applied;
+}
+
+async function loadDailyStats() {
+  const container = document.getElementById('calMonths');
+  if (!container) return;
+
+  try {
+    // ~17 weeks ≈ 119 days so the grid fills nicely
+    const res = await fetch('/api/stats/daily?days=119');
+    const data = await res.json();
+    const days = data.days || [];
+    calDaysByDate = {};
+    days.forEach(d => { calDaysByDate[d.date] = d; });
+
+    const maxScore = Math.max(0, ...days.map(calActivityScore));
+
+    // Build week columns starting from the Sunday of the first day
+    if (!days.length) {
+      container.innerHTML = '';
+      return;
+    }
+
+    const first = new Date(days[0].date + 'T12:00:00');
+    const last  = new Date(days[days.length - 1].date + 'T12:00:00');
+    // Align start to Sunday
+    const gridStart = new Date(first);
+    gridStart.setDate(gridStart.getDate() - gridStart.getDay());
+
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const weeks = [];
+    let cursor = new Date(gridStart);
+    while (cursor <= last || cursor.getDay() !== 0 || weeks.length === 0) {
+      const week = [];
+      for (let i = 0; i < 7; i++) {
+        const ds = formatDate(cursor);
+        const inRange = calDaysByDate[ds];
+        week.push(inRange ? { date: ds, data: inRange } : { date: ds, data: null });
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      weeks.push(week);
+      if (cursor > last && cursor.getDay() === 0) break;
+      // safety
+      if (weeks.length > 60) break;
+    }
+
+    container.innerHTML = '';
+    let prevMonth = -1;
+    weeks.forEach(week => {
+      const col = document.createElement('div');
+      col.className = 'cal-month-col';
+
+      // Month label on the first week that contains the 1st, or first week of a new month
+      const mid = week.find(c => c.data) || week[0];
+      const midDate = new Date(mid.date + 'T12:00:00');
+      const month = midDate.getMonth();
+      const label = document.createElement('div');
+      label.className = 'cal-month-label';
+      if (month !== prevMonth) {
+        label.textContent = monthNames[month];
+        prevMonth = month;
+      }
+      col.appendChild(label);
+
+      const weekEl = document.createElement('div');
+      weekEl.className = 'cal-week';
+      week.forEach(cell => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cal-cell';
+        if (!cell.data) {
+          btn.classList.add('empty');
+          btn.disabled = true;
+          btn.tabIndex = -1;
+        } else {
+          const score = calActivityScore(cell.data);
+          btn.classList.add('l' + calLevel(score, maxScore));
+          btn.dataset.date = cell.date;
+          btn.title = `${cell.date}: ${cell.data.title_clicked} clicked, ${cell.data.german_filtered} german, ${cell.data.ai_matched} matched, ${cell.data.applied} applied`;
+          btn.addEventListener('mouseenter', () => showCalDetail(cell.date));
+          btn.addEventListener('click', () => showCalDetail(cell.date));
+        }
+        weekEl.appendChild(btn);
+      });
+      col.appendChild(weekEl);
+      container.appendChild(col);
+    });
+
+    // Default detail: today (or last day with activity)
+    const today = formatDate(new Date());
+    if (calDaysByDate[today]) {
+      showCalDetail(today);
+    } else {
+      const withActivity = [...days].reverse().find(d => calActivityScore(d) > 0 || d.german_filtered > 0);
+      if (withActivity) showCalDetail(withActivity.date);
+    }
+  } catch (_) {
+    container.innerHTML = '';
+  }
 }
 
 /* ── Status filter ───────────────────────────────────────────────── */
@@ -1068,6 +1377,7 @@ async function updateStatus(select) {
     if (!res.ok) throw new Error('Request failed');
     showToast(`✅ Status updated to "${STATUS_LABEL[status]}"`);
     loadStats();
+    loadDailyStats();
 
     // Immediately update the Apply Now ↔ View Detail button on the card
     const btn = select.closest('.status-row').previousElementSibling;
@@ -1197,6 +1507,12 @@ function escHtml(str) {
 }
 
 /* ── Init ────────────────────────────────────────────────────────── */
+function refreshAll() {
+  loadStats();
+  loadDailyStats();
+  loadJobs();
+}
+
 // Date input listeners – debounced so the native picker doesn't fire mid-pick
 ['dateFrom', 'dateTo'].forEach(id => {
   document.getElementById(id).addEventListener('change', function() {
@@ -1208,6 +1524,7 @@ function escHtml(str) {
 });
 
 loadStats();
+loadDailyStats();
 setLayout(currentLayout);
 loadJobs();
 </script>

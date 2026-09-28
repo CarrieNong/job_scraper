@@ -229,8 +229,8 @@ def increment_scraper_stat(key: str, amount: int = 1) -> None:
     """
     Atomically increment a global scraper counter by `amount`.
 
-    Counters are stored in the `scraper_stats` collection as a single
-    document with _id="global".  The document is created on first use.
+    Also increments the same key on today's daily document
+    (_id="daily_YYYY-MM-DD") so the activity calendar can show per-day counts.
 
     Recognised keys
     ---------------
@@ -241,9 +241,19 @@ def increment_scraper_stat(key: str, amount: int = 1) -> None:
     german_filtered       – detail pages detected as German and skipped
     """
     db = get_db()
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
     db["scraper_stats"].update_one(
         {"_id": "global"},
-        {"$inc": {key: amount}, "$set": {"updated_at": datetime.now()}},
+        {"$inc": {key: amount}, "$set": {"updated_at": now}},
+        upsert=True,
+    )
+    db["scraper_stats"].update_one(
+        {"_id": f"daily_{today}"},
+        {
+            "$inc": {key: amount},
+            "$set": {"date": today, "updated_at": now},
+        },
         upsert=True,
     )
 
@@ -259,6 +269,116 @@ def get_scraper_stats() -> dict:
     doc.pop("_id", None)
     doc.pop("updated_at", None)
     return doc
+
+
+# Statuses that mean the user has submitted an application
+APPLIED_STATUSES = ("applied", "rejected", "interview")
+
+
+def get_daily_activity_stats(days: int = 120) -> list:
+    """
+    Build per-day activity stats for the activity calendar heatmap.
+
+    Returns a list of dicts sorted by date ascending, covering the last
+    `days` calendar days (including today).  Each item:
+
+        {
+          "date": "YYYY-MM-DD",
+          "title_clicked": int,    # detail pages opened
+          "german_filtered": int,  # German JDs skipped after open
+          "ai_matched": int,       # jobs copied to matched_jobs
+          "applied": int,          # applied + rejected + interview
+        }
+
+    title_clicked / german_filtered come from daily scraper_stats docs.
+    Days without a daily doc fall back to counting jobs.created_at for
+    title_clicked (german_filtered stays 0 for those historical days).
+    """
+    from collections import defaultdict
+    from datetime import timedelta
+
+    days = max(1, min(int(days or 120), 366))
+    now = datetime.now()
+    start = (now - timedelta(days=days - 1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    start_str = start.strftime("%Y-%m-%d")
+
+    buckets = defaultdict(lambda: {
+        "title_clicked": 0,
+        "german_filtered": 0,
+        "ai_matched": 0,
+        "applied": 0,
+        "_has_scraper_daily": False,
+    })
+
+    db = get_db()
+
+    # 1) Daily scraper counters (clicks + german filters)
+    for doc in db["scraper_stats"].find({"_id": {"$regex": r"^daily_"}}):
+        date = doc.get("date") or str(doc["_id"]).replace("daily_", "", 1)
+        if date < start_str:
+            continue
+        buckets[date]["title_clicked"] = int(doc.get("title_passed_clicked", 0) or 0)
+        buckets[date]["german_filtered"] = int(doc.get("german_filtered", 0) or 0)
+        buckets[date]["_has_scraper_daily"] = True
+
+    # 2) Fallback: jobs scraped that day ≈ clicked (minus german, which we
+    #    cannot recover historically)
+    for row in db["jobs"].aggregate([
+        {"$match": {"created_at": {"$gte": start, "$lte": end}}},
+        {"$group": {
+            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$created_at"}},
+            "count": {"$sum": 1},
+        }},
+    ]):
+        date = row["_id"]
+        if date and not buckets[date]["_has_scraper_daily"]:
+            buckets[date]["title_clicked"] = int(row["count"])
+
+    # 3) AI matched (matched_jobs by matched_at)
+    for row in db["matched_jobs"].aggregate([
+        {"$match": {"matched_at": {"$gte": start, "$lte": end}}},
+        {"$group": {
+            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$matched_at"}},
+            "count": {"$sum": 1},
+        }},
+    ]):
+        if row["_id"]:
+            buckets[row["_id"]]["ai_matched"] = int(row["count"])
+
+    # 4) Applied = applied + rejected + interview, dated by applied_at
+    #    (falls back to updated_at when applied_at was never set)
+    for row in db["matched_jobs"].aggregate([
+        {"$match": {"status": {"$in": list(APPLIED_STATUSES)}}},
+        {"$project": {
+            "apply_date": {"$ifNull": ["$applied_at", "$updated_at"]},
+        }},
+        {"$match": {"apply_date": {"$gte": start, "$lte": end}}},
+        {"$group": {
+            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$apply_date"}},
+            "count": {"$sum": 1},
+        }},
+    ]):
+        if row["_id"]:
+            buckets[row["_id"]]["applied"] = int(row["count"])
+
+    # Fill every calendar day in range so the heatmap has no gaps
+    out = []
+    cursor = start
+    while cursor <= end:
+        date = cursor.strftime("%Y-%m-%d")
+        b = buckets[date]
+        out.append({
+            "date": date,
+            "title_clicked": b["title_clicked"],
+            "german_filtered": b["german_filtered"],
+            "ai_matched": b["ai_matched"],
+            "applied": b["applied"],
+        })
+        cursor += timedelta(days=1)
+    return out
 
 
 def mark_job_as_matched(job_id, source, match_score=None, analysis=None):

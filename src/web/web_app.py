@@ -21,9 +21,11 @@ from dotenv import load_dotenv
 from core.db_mongo import (
     get_collection,
     get_scraper_stats,
+    get_daily_activity_stats,
     get_unmatched_jobs,
     count_unmatched_jobs,
     _parse_filter_date,
+    APPLIED_STATUSES,
 )
 
 load_dotenv()
@@ -208,21 +210,29 @@ def api_unmatched_jobs():
 
 @app.route("/api/jobs/<job_id>/status", methods=["PATCH"])
 def api_update_status(job_id: str):
-    """Update job status."""
+    """Update job status. Sets applied_at the first time a job is marked applied/rejected/interview."""
     data = request.get_json(silent=True) or {}
     new_status = data.get("status")
     if new_status not in STATUS_MAP:
         return jsonify({"error": f"Invalid status. Allowed: {list(STATUS_MAP.keys())}"}), 400
 
-    collection = get_collection("matched_jobs")
-    result = collection.update_one(
-        {"_id": ObjectId(job_id)},
-        {"$set": {"status": new_status, "updated_at": datetime.now()}}
-    )
+    try:
+        oid = ObjectId(job_id)
+    except Exception:
+        return jsonify({"error": "Invalid job ID"}), 400
 
-    if result.matched_count == 0:
+    collection = get_collection("matched_jobs")
+    job = collection.find_one({"_id": oid})
+    if not job:
         return jsonify({"error": "Job not found"}), 404
 
+    now = datetime.now()
+    update_fields = {"status": new_status, "updated_at": now}
+    # Stamp applied_at once when entering any post-application status
+    if new_status in APPLIED_STATUSES and not job.get("applied_at"):
+        update_fields["applied_at"] = now
+
+    collection.update_one({"_id": oid}, {"$set": update_fields})
     return jsonify({"ok": True, "status": new_status})
 
 
@@ -357,6 +367,8 @@ def api_stats():
     raw = list(collection.aggregate(pipeline))
     by_status = {item["_id"]: item["count"] for item in raw}
     ai_matched = sum(by_status.values())
+    # Applied funnel step includes rejected + interview (all post-application)
+    applied_total = sum(by_status.get(s, 0) for s in APPLIED_STATUSES)
 
     scraper = get_scraper_stats()
     unmatched = count_unmatched_jobs(threshold=MATCH_THRESHOLD)
@@ -372,9 +384,19 @@ def api_stats():
             "german_filtered": scraper.get("german_filtered", 0),
             "ai_matched": ai_matched,
             "ai_unmatched": unmatched,
-            "applied": by_status.get("applied", 0),
+            "applied": applied_total,
         },
     })
+
+
+@app.route("/api/stats/daily")
+def api_stats_daily():
+    """Return per-day activity counts for the calendar heatmap."""
+    try:
+        days = int(request.args.get("days", 120))
+    except (TypeError, ValueError):
+        days = 120
+    return jsonify({"days": get_daily_activity_stats(days=days)})
 
 
 # ─── Manual-apply endpoint ────────────────────────────────────────────────────
