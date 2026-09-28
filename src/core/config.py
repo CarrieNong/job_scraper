@@ -56,7 +56,7 @@ TITLE_EXCLUDE_KEYWORDS = [
     r"\bDesign\s+Engineer\b",
     r"\biOS\b",
     r"\bSwift\b",
-    r"\bForward\s+Deployed\s+Engineer\b",
+    r"\bForward\s+Deployed\b",
     r"\bInfrastructure\s+Engineer\b",
     r"\bAnalytics\s+Engineer\b",
     r"\bKubernetes\b",
@@ -71,12 +71,30 @@ TITLE_EXCLUDE_KEYWORDS = [
     r"\bTechnical\s+Customer\s+Support\b",
     r"\bHead\s+of\b",
     r"\bSecurity\s+Engineer\b",
-    r"\bRobotics\s+Engineer\b",
-    r"\bSystems\s+Engineer\b",
+    r"\bRobotic\b",        # Robotic / Robotics
+    r"\bRobotics\b",
+    r"\bSystems?\s+Engineer\b",  # System / Systems Engineer
     r"\bProcess\s+Validation\s+Engineer\b",
     r"\bSafety\s+Engineer\b",
     r"\bUI\b",             # UI Designer / UI Engineer
     r"\bUX\b",             # UX Designer / UX Researcher
+    r"\bUI/?UX\b",
+    r"\bManufacturing\b",
+    r"\bLocalization\s+Engineer\b",
+    r"\bExecutive\b",
+    r"\bMLOps\b",
+    r"\bSales\s+Engineer\b",
+    r"\bQuality\s+Management\b",
+    r"\bDeep\s+Learning\b",
+    r"\bSupport\s+Engineer\b",
+    r"\bSolutions?\s+Engineer\b",
+    r"\bR&D\s+Engineer\b",
+    r"\bSolutions?\s+Consultant\b",
+    r"\bDSP\s+Engineer\b",
+    r"\bResearch\s+Engineer\b",
+    r"\bML\s+Engineer\b",
+    r"\bNDE\s+Engineer\b",
+    r"\bMechanical\s+Engineer\b",
 ]
 
 
