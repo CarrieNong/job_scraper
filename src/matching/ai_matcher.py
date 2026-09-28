@@ -301,7 +301,12 @@ EXAMPLE — Special Match, pure frontend in Leipzig (score 9.5–10):
     return prompt
 
 
-def analyze_job_with_ai(job: Dict, user_profile: str, criteria: str) -> Optional[Dict]:
+def analyze_job_with_ai(
+    job: Dict,
+    user_profile: str,
+    criteria: str,
+    temperature: float = 0.3,
+) -> Optional[Dict]:
     """
     Use AI to analyze a job posting and determine match quality.
     
@@ -309,6 +314,7 @@ def analyze_job_with_ai(job: Dict, user_profile: str, criteria: str) -> Optional
         job: Job data dictionary
         user_profile: User's resume/profile
         criteria: Custom matching criteria
+        temperature: Sampling temperature (eval runs often use 0.0 for stability)
         
     Returns:
         AI analysis results as dictionary, or None if analysis fails
@@ -335,7 +341,7 @@ def analyze_job_with_ai(job: Dict, user_profile: str, criteria: str) -> Optional
                     "content": prompt
                 }
             ],
-            temperature=0.3,
+            temperature=temperature,
             response_format={"type": "json_object"}  # Ensures JSON response
         )
         

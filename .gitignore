@@ -34,3 +34,6 @@ env/
 
 # MongoDB dumps
 dump/
+
+# Matching eval run outputs (baselines may be committed intentionally)
+evals/results/
