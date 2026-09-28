@@ -81,13 +81,23 @@ else
 fi
 
 # Step 4: AI matching (runs only after both scrapers are done)
-log "Step 3/3: Running AI job matching (both scrapers done)..."
+log "Step 3/4: Running AI job matching (both scrapers done)..."
 $PYTHON src/matching/ai_matcher.py --threshold 7.0 > "$LOG_DIR/matcher_$(date +%Y%m%d).log" 2>&1
 MATCHER_EXIT=$?
 if [ $MATCHER_EXIT -eq 0 ]; then
     log "✅ AI matcher completed successfully"
 else
     log "⚠️  WARNING: AI matcher failed (exit code: $MATCHER_EXIT)"
+fi
+
+# Step 5: Clear JD text on unmatched jobs older than 14 days (keeps link + AI fields)
+log "Step 4/4: Clearing old unmatched job descriptions..."
+$PYTHON scripts/cleanup_unmatched_descriptions.py --execute --days 14 > "$LOG_DIR/cleanup_desc_$(date +%Y%m%d).log" 2>&1
+CLEANUP_EXIT=$?
+if [ $CLEANUP_EXIT -eq 0 ]; then
+    log "✅ Unmatched description cleanup completed"
+else
+    log "⚠️  WARNING: Unmatched description cleanup failed (exit code: $CLEANUP_EXIT)"
 fi
 
 # Close only the Chrome this run started. A reused debug window is left open.
@@ -101,6 +111,7 @@ log "=== Pipeline Completed ==="
 log "Indeed:     $([ $INDEED_EXIT -eq 0 ] && echo '✅' || echo '❌')"
 log "LinkedIn:   $([ $LINKEDIN_EXIT -eq 0 ] && echo '✅' || echo '❌')"
 log "AI Matcher: $([ $MATCHER_EXIT -eq 0 ] && echo '✅' || echo '❌')"
+log "Desc Clean: $([ $CLEANUP_EXIT -eq 0 ] && echo '✅' || echo '❌')"
 
 # Get today's stats from the database
 log "Fetching today's stats..."
