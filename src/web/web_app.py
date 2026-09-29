@@ -214,6 +214,19 @@ def _serialize(job: dict) -> dict:
     job["link"] = _normalize_link(job)
     # Ensure notes field always exists
     job.setdefault("notes", "")
+    # Ensure application Q&A list always exists
+    qa = job.get("application_qa")
+    if not isinstance(qa, list):
+        job["application_qa"] = []
+    else:
+        job["application_qa"] = [
+            {
+                "question": str(item.get("question", "")),
+                "answer": str(item.get("answer", "")),
+            }
+            for item in qa
+            if isinstance(item, dict)
+        ]
     # Ensure status always exists
     job.setdefault("status", "pending")
     # Hydrate / serialise application timeline
@@ -445,6 +458,41 @@ def api_update_notes(job_id: str):
     return jsonify({"ok": True})
 
 
+@app.route("/api/jobs/<job_id>/application-qa", methods=["PATCH"])
+def api_update_application_qa(job_id: str):
+    """Update application Q&A pairs for a matched job."""
+    data = request.get_json(silent=True) or {}
+    raw_qa = data.get("application_qa", [])
+    if not isinstance(raw_qa, list):
+        return jsonify({"error": "application_qa must be a list"}), 400
+
+    cleaned = []
+    for item in raw_qa:
+        if not isinstance(item, dict):
+            continue
+        question = str(item.get("question", "")).strip()
+        answer = str(item.get("answer", "")).strip()
+        if not question and not answer:
+            continue
+        cleaned.append({"question": question, "answer": answer})
+
+    try:
+        oid = ObjectId(job_id)
+    except Exception:
+        return jsonify({"error": "Invalid job ID"}), 400
+
+    collection = get_collection("matched_jobs")
+    result = collection.update_one(
+        {"_id": oid},
+        {"$set": {"application_qa": cleaned, "updated_at": datetime.now()}},
+    )
+
+    if result.matched_count == 0:
+        return jsonify({"error": "Job not found"}), 404
+
+    return jsonify({"ok": True, "application_qa": cleaned})
+
+
 @app.route("/api/jobs/<job_id>/info", methods=["PATCH"])
 def api_update_job_info(job_id: str):
     """Update job title / company / location in matched_jobs."""
@@ -531,6 +579,7 @@ def api_update_unmatched_status(job_id: str):
                     "applied_at":     None,
                     "application_timeline": [],
                     "notes":          "",
+                    "application_qa": [],
                     "created_at":     now,
                     "from_unmatched": True,
                 }

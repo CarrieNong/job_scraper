@@ -1088,6 +1088,100 @@
     .btn-save:hover { border-color: var(--accent); color: var(--accent); }
     .btn-save.saved { border-color: #22c55e; color: #22c55e; }
 
+    /* Application Q&A */
+    .qa-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .qa-label {
+      font-size: .72rem;
+      font-weight: 600;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .qa-list { display: flex; flex-direction: column; gap: 8px; }
+    .qa-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      position: relative;
+    }
+    .qa-item-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .qa-question {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 6px 8px;
+      font-size: .8rem;
+      outline: none;
+      font-family: inherit;
+      transition: border-color .15s;
+    }
+    .qa-question:focus { border-color: var(--accent); }
+    .qa-question::placeholder { color: var(--muted); }
+    .qa-answer {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: .8rem;
+      line-height: 1.5;
+      resize: vertical;
+      min-height: 56px;
+      outline: none;
+      font-family: inherit;
+      transition: border-color .15s;
+    }
+    .qa-answer:focus { border-color: var(--accent); }
+    .qa-answer::placeholder { color: var(--muted); }
+    .qa-remove {
+      flex-shrink: 0;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      width: 28px;
+      height: 28px;
+      font-size: .85rem;
+      cursor: pointer;
+      line-height: 1;
+      transition: border-color .15s, color .15s;
+    }
+    .qa-remove:hover { border-color: #ef4444; color: #ef4444; }
+    .qa-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-add-qa {
+      background: transparent;
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      padding: 4px 12px;
+      font-size: .75rem;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-add-qa:hover { border-color: var(--accent); color: var(--accent); }
+
     /* ── Empty state ──────────────────────────────────────────────── */
     .empty {
       grid-column: 1 / -1;
@@ -2006,9 +2100,42 @@ function renderCard(job) {
         >${escHtml(job.notes || '')}</textarea>
         <button class="btn-save" data-id="${job._id}" onclick="saveNotes(this)">Save Notes</button>
       </div>
+
+      ${renderApplicationQa(job)}
     </div>
   `;
   return card;
+}
+
+function renderQaItemHtml(item = {}) {
+  const q = escHtml(item.question || '');
+  const a = escHtml(item.answer || '');
+  return `
+    <div class="qa-item">
+      <div class="qa-item-header">
+        <input class="qa-question" type="text" placeholder="Question asked in the application…" value="${q}">
+        <button type="button" class="qa-remove" title="Remove" onclick="removeQaItem(this)">×</button>
+      </div>
+      <textarea class="qa-answer" rows="2" placeholder="Your answer…">${a}</textarea>
+    </div>
+  `;
+}
+
+function renderApplicationQa(job) {
+  const items = Array.isArray(job.application_qa) && job.application_qa.length
+    ? job.application_qa
+    : [{}];
+  const listHtml = items.map(renderQaItemHtml).join('');
+  return `
+    <div class="qa-wrap" data-id="${job._id}">
+      <div class="qa-label">Application Q&amp;A</div>
+      <div class="qa-list">${listHtml}</div>
+      <div class="qa-actions">
+        <button type="button" class="btn-add-qa" data-id="${job._id}" onclick="addQaItem(this)">+ Add question</button>
+        <button type="button" class="btn-save" data-id="${job._id}" onclick="saveApplicationQa(this)">Save Q&amp;A</button>
+      </div>
+    </div>
+  `;
 }
 
 function timelineStepClass(step) {
@@ -2369,6 +2496,48 @@ async function saveNotes(btn) {
     showToast('📝 Notes saved');
   } catch (err) {
     showToast('❌ Notes save failed', 'err');
+  }
+}
+
+/* ── Application Q&A ─────────────────────────────────────────────── */
+function addQaItem(btn) {
+  const wrap = btn.closest('.qa-wrap');
+  const list = wrap.querySelector('.qa-list');
+  list.insertAdjacentHTML('beforeend', renderQaItemHtml());
+  const last = list.lastElementChild;
+  last.querySelector('.qa-question').focus();
+}
+
+function removeQaItem(btn) {
+  const list = btn.closest('.qa-list');
+  const item = btn.closest('.qa-item');
+  item.remove();
+  if (!list.querySelector('.qa-item')) {
+    list.insertAdjacentHTML('beforeend', renderQaItemHtml());
+  }
+}
+
+async function saveApplicationQa(btn) {
+  const id   = btn.dataset.id;
+  const wrap = btn.closest('.qa-wrap');
+  const application_qa = [...wrap.querySelectorAll('.qa-item')].map(item => ({
+    question: item.querySelector('.qa-question').value.trim(),
+    answer:   item.querySelector('.qa-answer').value.trim(),
+  })).filter(pair => pair.question || pair.answer);
+
+  try {
+    const res = await fetch(`/api/jobs/${id}/application-qa`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({application_qa}),
+    });
+    if (!res.ok) throw new Error('Request failed');
+    btn.textContent = 'Saved ✓';
+    btn.classList.add('saved');
+    setTimeout(() => { btn.textContent = 'Save Q&A'; btn.classList.remove('saved'); }, 2000);
+    showToast('💬 Application Q&A saved');
+  } catch (err) {
+    showToast('❌ Q&A save failed', 'err');
   }
 }
 

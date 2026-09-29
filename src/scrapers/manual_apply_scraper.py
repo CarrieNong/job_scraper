@@ -525,6 +525,7 @@ def force_save_applied_job(job: dict, analysis: dict, applied_date: datetime = N
         "updated_at":  t,
         # created_at is intentionally omitted here — set only on first insert below
         "notes":       "",
+        "application_qa": [],
         "manually_applied": True,
     }
 
