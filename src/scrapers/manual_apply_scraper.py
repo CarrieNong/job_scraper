@@ -46,7 +46,7 @@ import trafilatura
 
 from core.db_mongo import init_db, get_collection, mark_job_as_matched, save_job
 from matching.ai_matcher import analyze_job_with_ai, load_user_profile, load_matching_criteria, _analysis_fields
-from core.scraper_utils import connect_browser, strip_html, pause, detect_job_detail_language, safe_text
+from core.scraper_utils import connect_browser, strip_html, pause, is_non_english_job_detail, safe_text
 from core.config import INDEED_CONFIG
 
 # Minimum chars of extracted body text before we treat a generic page as a JD
@@ -630,10 +630,13 @@ def process_urls(urls: list[str], applied_date: datetime = None):
                 job["title"] = f"(Unknown title — job_id {job.get('job_id', '')})"
                 print(f"  ⚠️  Title not found, using fallback: {job['title']}")
 
-            # Language check (skip German-only pages)
-            lang, de_share = detect_job_detail_language(job.get("description", ""))
-            if lang == "de":
-                print(f"  ⚠️  Description is German ({de_share:.0%}) — saving anyway (you applied manually)")
+            # Language check (English-only gate; non-EN still saved for manual apply)
+            should_skip, lang, de_share = is_non_english_job_detail(job.get("description", ""))
+            if should_skip:
+                print(
+                    f"  ⚠️  Description is non-English ({lang}, de_share={de_share:.0%}) "
+                    f"— saving anyway (you applied manually)"
+                )
 
             # AI matching
             print("  🤖 Running AI matching…")

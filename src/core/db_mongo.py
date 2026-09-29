@@ -238,7 +238,9 @@ def increment_scraper_stat(key: str, amount: int = 1) -> None:
                             (i.e. we actually clicked into the detail page)
     ai_title_filtered     – titles without DEFAULT_KEYWORDS that AI judged
                             unrelated to target roles (skipped before click)
-    german_filtered       – detail pages detected as German and skipped
+    german_filtered       – detail pages not in English (mostly German; FR etc.
+                            rare) and skipped; UI still labels this bucket
+                            "German Filtered"
     """
     db = get_db()
     now = datetime.now()
@@ -285,7 +287,7 @@ def get_daily_activity_stats(days: int = 120) -> list:
         {
           "date": "YYYY-MM-DD",
           "title_clicked": int,    # detail pages opened
-          "german_filtered": int,  # German JDs skipped after open
+          "german_filtered": int,  # non-English JDs skipped (UI: German Filtered)
           "ai_matched": int,       # jobs copied to matched_jobs
           "applied": int,          # applied + rejected + interview
         }

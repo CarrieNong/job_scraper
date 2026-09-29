@@ -29,7 +29,7 @@ from core.scraper_utils import (
     connect_browser,
     open_scraper_page,
     should_skip_title_before_click,
-    detect_job_detail_language,
+    is_non_english_job_detail,
     strip_html,
 )
 
@@ -172,15 +172,18 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
 
             detail = page.locator(DETAIL_SELECTOR).first
             description = strip_html(detail.inner_html(timeout=10000) or "")
-            lang, german_share = detect_job_detail_language(description)
+            should_skip, lang, german_share = is_non_english_job_detail(description)
             print(
                 f"Job {index + 1}: description length {len(description)}, "
                 f"language={lang or 'unknown'}, german_share={german_share:.0%}"
             )
 
-            if lang == "de":
+            if should_skip:
                 increment_scraper_stat("german_filtered")
-                print(f"Job {index + 1}: German description detected, skip save")
+                print(
+                    f"Job {index + 1}: Non-English description ({lang}) detected, "
+                    f"skip save (german_filtered)"
+                )
             else:
                 # company / location / applicants are left empty for now.
                 job_data = {

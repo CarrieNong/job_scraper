@@ -3,7 +3,8 @@
 Delete jobs that fail pre-filter rules used by the scrapers:
 
 1. Title matches TITLE_EXCLUDE_KEYWORDS
-2. Description (HTML stripped) has German share > GERMAN_SHARE_THRESHOLD (20%)
+2. Description is not English (DE / FR / …; same english-only gate as scrapers).
+   Still reported under the german_filtered bucket in the UI.
 
 Jobs already present in matched_jobs are never deleted.
 Optionally reset AI analysis fields on remaining non-matched jobs
@@ -21,8 +22,7 @@ from dotenv import load_dotenv
 
 from core.db_mongo import get_collection
 from core.scraper_utils import (
-    GERMAN_SHARE_THRESHOLD,
-    detect_job_detail_language,
+    is_non_english_job_detail,
     is_title_excluded,
 )
 
@@ -67,16 +67,16 @@ def _exclusion_reasons(job):
         reasons.append("title")
 
     description = job.get("description") or ""
-    lang, german_share = detect_job_detail_language(description)
-    if lang == "de":
-        reasons.append(f"german:{german_share:.0%}")
+    should_skip, lang, german_share = is_non_english_job_detail(description)
+    if should_skip:
+        reasons.append(f"non_en:{lang}:{german_share:.0%}")
 
     return reasons
 
 
 def find_excluded_jobs(jobs_coll, protected):
     """
-    Find jobs failing title and/or German-description filters,
+    Find jobs failing title and/or non-English description filters,
     excluding those already in matched_jobs.
     """
     to_delete = []  # list of (job, reasons)
@@ -106,7 +106,7 @@ def find_excluded_jobs(jobs_coll, protected):
 
         if any(r == "title" for r in reasons):
             title_count += 1
-        if any(r.startswith("german:") for r in reasons):
+        if any(r.startswith("non_en:") for r in reasons):
             german_count += 1
 
         key = (job.get("job_id"), job.get("source"))
@@ -192,9 +192,9 @@ def _print_samples(label, items):
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Delete jobs failing title exclude keywords or German-description "
-            f"share > {GERMAN_SHARE_THRESHOLD:.0%} "
-            "(keeps anything already in matched_jobs)."
+            "Delete jobs failing title exclude keywords or the English-only "
+            "description gate (non-EN still counted as german_filtered; "
+            "keeps anything already in matched_jobs)."
         )
     )
     parser.add_argument(
@@ -220,7 +220,7 @@ def main():
     protected = _protected_keys(matched)
     print(f"jobs total: {total_jobs}")
     print(f"matched_jobs protected keys: {len(protected)}")
-    print(f"German threshold: > {GERMAN_SHARE_THRESHOLD:.0%}")
+    print("Language gate: English only (non-EN → german_filtered)")
     print(f"mode: {'DRY-RUN' if dry_run else 'EXECUTE'}")
     print("\nScanning jobs (title + description language)...")
 
@@ -229,7 +229,7 @@ def main():
     )
 
     print(f"\nFail title filter (any, incl. protected): {title_count}")
-    print(f"Fail German filter (any, incl. protected): {german_count}")
+    print(f"Fail non-English filter (any, incl. protected): {german_count}")
     print(f"Would delete: {len(to_delete)}")
     print(f"Protected (keep, in matched_jobs): {len(protected_hits)}")
 

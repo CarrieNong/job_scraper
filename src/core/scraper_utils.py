@@ -253,9 +253,13 @@ def detect_job_detail_language(text: str):
     """
     Detect job-detail language.
 
-    Uses Lingua (Apache-2.0) n-gram models. Classified as German only when
-    more than GERMAN_SHARE_THRESHOLD of the text is German, so a few DE UI
-    strings on an English Indeed page do not count.
+    Uses Lingua (Apache-2.0) n-gram models. Classified as German when more
+    than GERMAN_SHARE_THRESHOLD of the text is German, so a few DE UI
+    strings on an English Indeed page do not force "de".
+
+    Callers that gate on language should use is_non_english_job_detail —
+    only English JDs continue; other languages (DE, FR, …) are skipped and
+    counted as german_filtered in the UI.
 
     Args:
         text: Job description HTML or plain text
@@ -276,6 +280,22 @@ def detect_job_detail_language(text: str):
     if language is None:
         return None, german_share
     return language.iso_code_639_1.name.lower(), german_share
+
+
+def is_non_english_job_detail(text: str):
+    """
+    English-only gate for job detail pages.
+
+    Returns (should_skip, lang, german_share). Skip when the JD is confidently
+    not English (German, French, Dutch, …). Too-short / undetectable text does
+    not skip (fail open). Callers still increment german_filtered — on DE job
+    boards almost all non-English posts are German; FR etc. are rare but must
+    not reach matching either.
+    """
+    lang, german_share = detect_job_detail_language(text)
+    if lang is None or lang == "en":
+        return False, lang, german_share
+    return True, lang, german_share
 
 
 def pause(min_seconds, max_seconds, message=None):

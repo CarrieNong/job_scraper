@@ -18,7 +18,7 @@ The **German gate** also stops the rest of the evaluation: do not score stack, y
 
 ### 1. German language (check first)
 
-German-language postings are already filtered out before matching. Do **not** re-filter because the JD looks German, and do **not** use keyword lists.
+Non-English postings (mostly German; French etc. rare) are already filtered out before matching and counted under German Filtered. Do **not** re-filter because the JD looks German, and do **not** use keyword lists.
 
 **Fail** only if the JD **explicitly** states that German is a mandatory job language (must-have / required / fluent / native / C1 / B2+ for the role). An English JD can still do this in writing — only then fail.
 

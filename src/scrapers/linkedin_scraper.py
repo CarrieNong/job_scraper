@@ -30,7 +30,7 @@ from core.scraper_utils import (
     open_scraper_page,
     goto_page,
     should_skip_title_before_click,
-    detect_job_detail_language,
+    is_non_english_job_detail,
 )
 
 # LinkedIn configuration
@@ -200,15 +200,18 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
 
             desc_locator = page.locator(".jobs-box__html-content")
             job_desc_text = safe_text(desc_locator, timeout=5000)
-            lang, german_share = detect_job_detail_language(job_desc_text)
+            should_skip, lang, german_share = is_non_english_job_detail(job_desc_text)
             print(
                 f"Job {index + 1}: description length {len(job_desc_text)}, "
                 f"language={lang or 'unknown'}, german_share={german_share:.0%}"
             )
 
-            if lang == "de":
+            if should_skip:
                 increment_scraper_stat("german_filtered")
-                print(f"Job {index + 1}: German description detected, skip save")
+                print(
+                    f"Job {index + 1}: Non-English description ({lang}) detected, "
+                    f"skip save (german_filtered)"
+                )
             else:
                 job_data = {
                     "title": title,
