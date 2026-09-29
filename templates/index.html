@@ -20,6 +20,7 @@
       --applied:    #22c55e;
       --rejected:   #ef4444;
       --interview:  #f59e0b;
+      --offer:      #10b981;
       --unsuitable: #8b5cf6;
       --closed:     #71717a;
     }
@@ -84,6 +85,7 @@
     .dot-applied    { background: var(--applied); }
     .dot-rejected   { background: var(--rejected); }
     .dot-interview  { background: var(--interview); }
+    .dot-offer      { background: var(--offer); }
     .dot-unsuitable { background: var(--unsuitable); }
     .dot-closed     { background: var(--closed); }
 
@@ -112,6 +114,270 @@
     .funnel-sep {
       font-size: 1.1rem; color: var(--border);
       padding: 0 2px; flex-shrink: 0;
+    }
+
+    /* ── Application Journey ─────────────────────────────────────── */
+    .journey-section {
+      padding: 14px 24px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .journey-title {
+      font-size: .88rem; font-weight: 700;
+      color: var(--text); letter-spacing: .02em;
+      margin-bottom: 10px;
+    }
+    .journey-title span { color: var(--muted); font-weight: 500; margin-left: 8px; }
+
+    .journey-panel {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Overall span line + company tracks share one time axis */
+    .journey-overview {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 28px;
+      gap: 8px;
+      align-items: end;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed var(--border);
+    }
+    .journey-axis {
+      position: relative;
+      height: 34px;
+      min-width: 0;
+    }
+    /* Same inset for axis + company plots so 0%/100% dots share one vertical line */
+    .journey-scale {
+      position: absolute;
+      left: 6px;
+      right: 6px;
+      top: 0;
+      bottom: 0;
+    }
+    .journey-axis-rail {
+      position: absolute;
+      left: 0; right: 0;
+      top: 8px;
+      height: 3px;
+      transform: translateY(-50%);
+      background: linear-gradient(90deg, var(--accent), var(--applied));
+      border-radius: 999px;
+      opacity: .7;
+    }
+    .jo-endpoint {
+      position: absolute;
+      top: 8px;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1;
+      box-shadow: 0 0 0 2px var(--bg);
+    }
+    .jo-endpoint.start {
+      left: 0%;
+      background: var(--accent);
+    }
+    .jo-endpoint.end {
+      left: 100%;
+      background: var(--applied);
+    }
+    .journey-axis-label {
+      position: absolute;
+      top: 16px;
+      font-size: .65rem;
+      font-weight: 650;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .journey-axis-label.start {
+      left: 0%;
+      transform: translateX(0);
+    }
+    .journey-axis-label.end {
+      left: 100%;
+      transform: translateX(-100%);
+    }
+    .journey-axis-today {
+      position: absolute;
+      top: 1px;
+      height: 14px;
+      width: 1px;
+      background: var(--muted);
+      opacity: .55;
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+    .journey-overview-total {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 14px;
+      line-height: 1.05;
+    }
+    .journey-overview-total .jot-num {
+      font-size: 1rem;
+      font-weight: 750;
+      color: var(--applied);
+    }
+    .journey-overview-total .jot-label {
+      font-size: .58rem;
+      color: var(--muted);
+    }
+
+    /* Per-company tracks — same axis width as overview */
+    .journey-tracks {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .journey-track {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 28px;
+      gap: 8px;
+      align-items: center;
+      min-height: 22px;
+    }
+    .journey-plot {
+      position: relative;
+      height: 18px;
+      min-width: 0;
+    }
+    .jt-seg {
+      position: absolute;
+      top: 50%;
+      height: 2px;
+      transform: translateY(-50%);
+      background: var(--interview);
+      opacity: .45;
+      pointer-events: none;
+    }
+    .jt-seg.end-rejected { background: var(--rejected); }
+    .jt-seg.end-offer { background: var(--offer); }
+    .jt-node {
+      position: absolute;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      transform: translate(-50%, -50%);
+      padding: 0;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1;
+    }
+    .jt-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: var(--node-color, var(--accent));
+      box-shadow: 0 0 0 2px var(--border);
+      display: block;
+      transition: transform .12s, box-shadow .12s;
+      pointer-events: none;
+    }
+    .jt-node:hover .jt-dot {
+      transform: scale(1.4);
+      box-shadow: 0 0 0 3px var(--node-color, var(--accent));
+    }
+    .jt-node.step-applied   { --node-color: var(--applied); }
+    .jt-node.step-interview { --node-color: var(--interview); }
+    .jt-node.step-rejected  { --node-color: var(--rejected); }
+    .jt-node.step-offer     { --node-color: var(--offer); }
+    .journey-side {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .jt-info {
+      flex-shrink: 0;
+      width: 15px; height: 15px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--muted);
+      font-size: .62rem;
+      font-weight: 700;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-color .15s, color .15s, background .15s;
+    }
+    .jt-info:hover, .jt-info.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: #6c8cff18;
+    }
+    .jt-company-pop {
+      position: fixed;
+      z-index: 1001;
+      background: #0b0d14;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      min-width: 140px;
+      max-width: min(280px, calc(100vw - 24px));
+      box-shadow: 0 10px 28px rgba(0,0,0,.45);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(4px);
+      transition: opacity .12s, transform .12s;
+    }
+    .jt-company-pop.show {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+    .jt-company-pop .jcp-company {
+      font-size: .78rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .jt-company-pop .jcp-title {
+      font-size: .7rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .jt-floating-tip {
+      position: fixed;
+      z-index: 1000;
+      transform: translate(-50%, -100%);
+      margin-top: -8px;
+      background: #0b0d14;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: .72rem;
+      line-height: 1.35;
+      padding: 5px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      box-shadow: 0 8px 20px rgba(0,0,0,.4);
+      transition: opacity .1s;
+    }
+    .jt-floating-tip.show {
+      opacity: 1;
+      visibility: visible;
+    }
+    .journey-empty {
+      font-size: .8rem; color: var(--muted);
+      padding: 4px 2px;
     }
 
     /* ── Activity calendar heatmap ────────────────────────────────── */
@@ -435,6 +701,7 @@
     .status-pill.s-applied    { color: var(--applied);    border-color: var(--applied)55;    background: #22c55e18; }
     .status-pill.s-rejected   { color: var(--rejected);   border-color: var(--rejected)55;   background: #ef444418; }
     .status-pill.s-interview  { color: var(--interview);  border-color: var(--interview)55;  background: #f59e0b18; }
+    .status-pill.s-offer      { color: var(--offer);      border-color: var(--offer)55;      background: #10b98118; }
     .status-pill.s-unsuitable { color: var(--unsuitable); border-color: var(--unsuitable)55; background: #8b5cf618; }
     .status-pill.s-closed     { color: var(--closed);     border-color: var(--closed)55;     background: #71717a18; }
 
@@ -594,27 +861,200 @@
     .btn-apply:hover { opacity: .88; transform: scale(1.02); }
     .btn-apply.btn-applied { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
 
-    /* Status select */
-    .status-row { display: flex; gap: 8px; align-items: center; }
-    .status-select {
-      flex: 1;
+    /* Application progress timeline */
+    .progress-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .progress-title {
+      font-size: .72rem;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .progress-track {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+      overflow-x: auto;
+      padding: 4px 2px 2px;
+      scrollbar-width: thin;
+    }
+    .progress-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 72px;
+      max-width: 88px;
+      cursor: pointer;
+      flex-shrink: 0;
+      position: relative;
+      background: none;
+      border: none;
+      color: inherit;
+      padding: 0;
+      font: inherit;
+    }
+    .progress-node:hover .node-dot {
+      transform: scale(1.15);
+    }
+    .node-label {
+      font-size: .72rem;
+      font-weight: 650;
+      color: var(--text);
+      text-align: center;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+    .node-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--node-color, var(--accent));
+      border: 2px solid var(--surface);
+      box-shadow: 0 0 0 2px var(--node-color, var(--accent));
+      transition: transform .15s, box-shadow .15s;
+      position: relative;
+      z-index: 1;
+    }
+    .node-time {
+      font-size: .65rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.25;
+      font-variant-numeric: tabular-nums;
+    }
+    .progress-node.step-applied   { --node-color: var(--applied); }
+    .progress-node.step-interview { --node-color: var(--interview); }
+    .progress-node.step-rejected  { --node-color: var(--rejected); }
+    .progress-node.step-offer     { --node-color: var(--offer); }
+    .progress-line {
+      width: 28px;
+      height: 2px;
+      background: var(--border);
+      margin-top: 22px;
+      flex-shrink: 0;
+      align-self: flex-start;
+    }
+    .progress-line.done { background: var(--interview); opacity: .55; }
+    .progress-line.done.end-rejected { background: var(--rejected); }
+    .progress-line.done.end-offer { background: var(--offer); }
+    .progress-empty {
+      font-size: .8rem;
+      color: var(--muted);
+      padding: 4px 0;
+    }
+    .progress-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .progress-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text);
+      padding: 4px 10px;
+      font-size: .72rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color .15s, color .15s, background .15s;
+    }
+    .progress-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .progress-btn.btn-apply-step { border-color: var(--applied)66; color: var(--applied); }
+    .progress-btn.btn-interview-step { border-color: var(--interview)66; color: var(--interview); }
+    .progress-btn.btn-reject-step { border-color: var(--rejected)66; color: var(--rejected); }
+    .progress-btn.btn-offer-step { border-color: var(--offer)66; color: var(--offer); }
+    .progress-btn.btn-undo {
+      color: var(--muted);
+      border-style: dashed;
+    }
+    .progress-side {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding-top: 2px;
+      border-top: 1px dashed var(--border);
+    }
+    .progress-side-label {
+      font-size: .7rem;
+      color: var(--muted);
+    }
+    .status-side-select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      padding: 4px 8px;
+      font-size: .72rem;
+      cursor: pointer;
+      outline: none;
+    }
+    .status-side-select:focus { border-color: var(--accent); }
+
+    /* Timeline datetime modal */
+    .tl-modal-backdrop {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,.55);
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .tl-modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      width: min(360px, 100%);
+      display: flex; flex-direction: column; gap: 12px;
+      box-shadow: 0 16px 40px rgba(0,0,0,.4);
+    }
+    .tl-modal h3 {
+      font-size: .95rem;
+      font-weight: 650;
+    }
+    .tl-modal p {
+      font-size: .78rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .tl-modal input[type="datetime-local"] {
       background: var(--surface2);
       border: 1px solid var(--border);
       border-radius: 8px;
       color: var(--text);
-      padding: 7px 10px;
-      font-size: .82rem;
-      cursor: pointer;
+      padding: 8px 10px;
+      font-size: .85rem;
       outline: none;
-      transition: border-color .15s;
+      font-family: inherit;
     }
-    .status-select:focus { border-color: var(--accent); }
-    .status-select.s-pending    { border-color: var(--pending);    color: var(--pending); }
-    .status-select.s-applied    { border-color: var(--applied);    color: var(--applied); }
-    .status-select.s-rejected   { border-color: var(--rejected);   color: var(--rejected); }
-    .status-select.s-interview  { border-color: var(--interview);  color: var(--interview); }
-    .status-select.s-unsuitable { border-color: var(--unsuitable); color: var(--unsuitable); }
-    .status-select.s-closed     { border-color: var(--closed);     color: var(--closed); }
+    .tl-modal input[type="datetime-local"]:focus { border-color: var(--accent); }
+    .tl-modal-actions {
+      display: flex; gap: 8px; justify-content: flex-end;
+    }
+    .tl-modal-actions button {
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: .8rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+    }
+    .tl-modal-actions .tl-confirm {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
 
     /* Notes */
     .notes-wrap { display: flex; flex-direction: column; gap: 6px; }
@@ -776,6 +1216,14 @@
   </div>
 </div>
 
+<!-- ── Application Journey ─────────────────────────────────────────── -->
+<div class="journey-section" id="journeySection">
+  <div class="journey-title">Application Journey <span>timelines</span></div>
+  <div id="journeyRoot">
+    <div class="journey-empty">Loading…</div>
+  </div>
+</div>
+
 <!-- ── Activity calendar heatmap ───────────────────────────────────── -->
 <div class="cal-section" id="calSection">
   <div class="cal-header">
@@ -846,6 +1294,10 @@
     <span class="dot dot-interview"></span>
     <span>Interview <b id="cnt-interview">–</b></span>
   </div>
+  <div class="stat-chip" data-status="offer" onclick="setStatusFilter('offer')">
+    <span class="dot dot-offer"></span>
+    <span>Offer <b id="cnt-offer">–</b></span>
+  </div>
   <div class="stat-chip" data-status="rejected"  onclick="setStatusFilter('rejected')">
     <span class="dot dot-rejected"></span>
     <span>Rejected <b id="cnt-rejected">–</b></span>
@@ -911,9 +1363,27 @@ const STATUS_LABEL = {
   applied:    'Applied',
   rejected:   'Rejected',
   interview:  'Interview',
+  offer:      'Offer',
   unsuitable: 'Unsuitable',
   closed:     'Closed',
 };
+
+const TIMELINE_LABEL = {
+  applied:          'Applied',
+  interview_invite: 'Invite',
+  interview_1:      'Round 1',
+  interview_2:      'Round 2',
+  interview_3:      'Round 3',
+  interview_final:  'Final',
+  rejected:         'Rejected',
+  offer:            'Offer',
+};
+
+const INTERVIEW_STEPS = ['interview_1', 'interview_2', 'interview_3', 'interview_final'];
+const TERMINAL_STEPS = new Set(['rejected', 'offer']);
+
+/** In-memory timeline cache keyed by job id */
+const jobTimelines = {};
 
 /* ── Layout toggle ───────────────────────────────────────────────── */
 function setLayout(mode) {
@@ -961,7 +1431,7 @@ async function loadStats() {
       const el = document.getElementById(`cnt-${status}`);
       if (el) el.textContent = cnt;
     }
-    ['pending','applied','rejected','interview','unsuitable','closed'].forEach(s => {
+    ['pending','applied','rejected','interview','offer','unsuitable','closed'].forEach(s => {
       if (!data.by_status[s]) {
         const el = document.getElementById(`cnt-${s}`);
         if (el) el.textContent = 0;
@@ -976,6 +1446,214 @@ async function loadStats() {
       document.getElementById('f-applied').textContent = data.funnel.applied;
     }
   } catch (_) {}
+}
+
+/* ── Application Journey ─────────────────────────────────────────── */
+function formatJourneyDate(iso) {
+  if (!iso) return '';
+  const m = String(iso).match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[Number(m[2]) - 1]} ${Number(m[3])}`;
+}
+
+function journeyNodeClass(step) {
+  if (step === 'applied') return 'step-applied';
+  if (step === 'rejected') return 'step-rejected';
+  if (step === 'offer') return 'step-offer';
+  if (String(step).startsWith('interview_')) return 'step-interview';
+  return '';
+}
+
+function parseJourneyDay(iso) {
+  const m = String(iso || '').match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+function journeyPct(day, start, end) {
+  if (!day || !start || !end) return 0;
+  const t0 = start.getTime();
+  const t1 = end.getTime();
+  if (t1 <= t0) return 0;
+  const p = ((day.getTime() - t0) / (t1 - t0)) * 100;
+  return Math.max(0, Math.min(100, p));
+}
+
+function renderCompanyTrack(track, start, end) {
+  const steps = (track.steps || [])
+    .map(s => ({ ...s, _day: parseJourneyDay(s.date || s.at) }))
+    .filter(s => s._day)
+    .sort((a, b) => a._day - b._day);
+
+  const segs = [];
+  for (let i = 0; i < steps.length - 1; i++) {
+    const a = journeyPct(steps[i]._day, start, end);
+    const b = journeyPct(steps[i + 1]._day, start, end);
+    const left = Math.min(a, b);
+    const width = Math.max(0, Math.abs(b - a));
+    let cls = 'jt-seg';
+    if (steps[i + 1].step === 'rejected') cls += ' end-rejected';
+    else if (steps[i + 1].step === 'offer') cls += ' end-offer';
+    segs.push(`<div class="${cls}" style="left:${left}%;width:${width}%"></div>`);
+  }
+
+  const nodes = steps.map(s => {
+    const label = s.label || s.step;
+    const when = formatJourneyDate(s.date || s.at);
+    const tip = when ? `${label} · ${when}` : label;
+    const left = journeyPct(s._day, start, end);
+    return `
+      <button type="button" class="jt-node ${journeyNodeClass(s.step)}"
+              style="left:${left}%"
+              data-tip="${escHtml(tip)}"
+              onmouseenter="showJourneyTip(this)"
+              onmouseleave="hideJourneyTip()"
+              onfocus="showJourneyTip(this)"
+              onblur="hideJourneyTip()"
+              aria-label="${escHtml(tip)}">
+        <span class="jt-dot"></span>
+      </button>`;
+  }).join('');
+
+  const company = track.company || 'Unknown';
+  const title = track.title || '';
+
+  return `
+    <div class="journey-track">
+      <div class="journey-plot">
+        <div class="journey-scale">${segs.join('')}${nodes}</div>
+      </div>
+      <div class="journey-side">
+        <button type="button" class="jt-info"
+                data-company="${escHtml(company)}"
+                data-title="${escHtml(title)}"
+                title="Company info"
+                onclick="toggleCompanyPop(this)"
+                aria-label="Company info">i</button>
+      </div>
+    </div>
+  `;
+}
+
+function toggleCompanyPop(btn) {
+  const key = `${btn.dataset.company || ''}||${btn.dataset.title || ''}`;
+  const existing = document.getElementById('jtCompanyPop');
+  if (existing && existing.dataset.anchorId === key) {
+    hideCompanyPop();
+    return;
+  }
+  hideCompanyPop();
+
+  btn.classList.add('active');
+
+  const pop = document.createElement('div');
+  pop.id = 'jtCompanyPop';
+  pop.className = 'jt-company-pop';
+  pop.dataset.anchorId = key;
+  pop.innerHTML = `
+    <div class="jcp-company">${escHtml(btn.dataset.company || 'Unknown')}</div>
+    ${btn.dataset.title ? `<div class="jcp-title">${escHtml(btn.dataset.title)}</div>` : ''}
+  `;
+  document.body.appendChild(pop);
+
+  const r = btn.getBoundingClientRect();
+  const pad = 8;
+  const pw = pop.offsetWidth;
+  const ph = pop.offsetHeight;
+  let left = r.right - pw;
+  let top = r.bottom + 6;
+  if (left < pad) left = pad;
+  if (left + pw > window.innerWidth - pad) left = window.innerWidth - pad - pw;
+  if (top + ph > window.innerHeight - pad) top = r.top - ph - 6;
+  pop.style.left = `${left}px`;
+  pop.style.top = `${top}px`;
+  requestAnimationFrame(() => pop.classList.add('show'));
+}
+
+function hideCompanyPop() {
+  document.querySelectorAll('.jt-info.active').forEach(el => el.classList.remove('active'));
+  const pop = document.getElementById('jtCompanyPop');
+  if (pop) pop.remove();
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.jt-info') || e.target.closest('#jtCompanyPop')) return;
+  hideCompanyPop();
+});
+
+function showJourneyTip(el) {
+  hideCompanyPop();
+  const text = el.getAttribute('data-tip') || '';
+  if (!text) return;
+  let tip = document.getElementById('jtFloatingTip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'jtFloatingTip';
+    tip.className = 'jt-floating-tip';
+    document.body.appendChild(tip);
+  }
+  tip.textContent = text;
+  const r = el.getBoundingClientRect();
+  tip.style.left = `${r.left + r.width / 2}px`;
+  tip.style.top = `${r.top}px`;
+  tip.classList.add('show');
+}
+
+function hideJourneyTip() {
+  const tip = document.getElementById('jtFloatingTip');
+  if (tip) tip.classList.remove('show');
+}
+
+async function loadJourney() {
+  const root = document.getElementById('journeyRoot');
+  if (!root) return;
+  hideCompanyPop();
+  try {
+    const res = await fetch('/api/journey');
+    const data = await res.json();
+    const total = data.total_applied || 0;
+
+    if (!total) {
+      root.innerHTML = '<div class="journey-empty">No applications recorded yet</div>';
+      return;
+    }
+
+    const start = parseJourneyDay(data.start_date);
+    const end = parseJourneyDay(data.end_date);
+    const today = parseJourneyDay(data.today || data.end_date);
+    const todayPct = journeyPct(today, start, end);
+    const showToday = today && start && end && today > start && today < end;
+
+    const tracks = data.tracks || [];
+    const tracksHtml = tracks.length
+      ? `<div class="journey-tracks">${tracks.map(t => renderCompanyTrack(t, start, end)).join('')}</div>`
+      : `<div class="journey-empty">No interview timelines yet</div>`;
+
+    root.innerHTML = `
+      <div class="journey-panel">
+        <div class="journey-overview">
+          <div class="journey-axis">
+            <div class="journey-scale">
+              <div class="journey-axis-rail"></div>
+              ${showToday ? `<div class="journey-axis-today" style="left:${todayPct}%"></div>` : ''}
+              <span class="jo-endpoint start"></span>
+              <span class="jo-endpoint end"></span>
+              <span class="journey-axis-label start">${formatJourneyDate(data.start_date)}</span>
+              <span class="journey-axis-label end">${formatJourneyDate(data.end_date)}</span>
+            </div>
+          </div>
+          <div class="journey-overview-total">
+            <div class="jot-num">${total}</div>
+            <div class="jot-label">applied</div>
+          </div>
+        </div>
+        ${tracksHtml}
+      </div>
+    `;
+  } catch (_) {
+    root.innerHTML = '<div class="journey-empty">Failed to load journey</div>';
+  }
 }
 
 /* ── Activity calendar heatmap ───────────────────────────────────── */
@@ -1312,21 +1990,12 @@ function renderCard(job) {
 
       ${matchReasons ? `<ul style="font-size:.78rem;color:var(--muted);padding-left:16px;line-height:1.6;">${matchReasons}</ul>` : ''}
 
-      <a class="btn-apply ${status === 'applied' ? 'btn-applied' : ''}"
+      <a class="btn-apply ${['applied','interview','rejected','offer'].includes(status) ? 'btn-applied' : ''}"
          href="${escHtml(job.link || '#')}" target="_blank" rel="noopener">
-        ${status === 'applied' ? '🔗 View Detail' : '🚀 Apply Now'}
+        ${['applied','interview','rejected','offer'].includes(status) ? '🔗 View Detail' : '🚀 Apply Now'}
       </a>
 
-      <div class="status-row">
-        <select class="status-select s-${status}" data-id="${job._id}" onchange="updateStatus(this)">
-          <option value="pending"    ${status==='pending'    ? 'selected':''}>📋 Not Applied</option>
-          <option value="applied"    ${status==='applied'    ? 'selected':''}>✅ Applied</option>
-          <option value="interview"  ${status==='interview'  ? 'selected':''}>🤝 Interview</option>
-          <option value="rejected"   ${status==='rejected'   ? 'selected':''}>❌ Rejected</option>
-          <option value="unsuitable" ${status==='unsuitable' ? 'selected':''}>🚫 Unsuitable</option>
-          <option value="closed"     ${status==='closed'     ? 'selected':''}>🔒 Closed</option>
-        </select>
-      </div>
+      ${renderProgressBlock(job)}
 
       <div class="notes-wrap">
         <textarea
@@ -1340,6 +2009,110 @@ function renderCard(job) {
     </div>
   `;
   return card;
+}
+
+function timelineStepClass(step) {
+  if (step === 'applied') return 'step-applied';
+  if (step === 'rejected') return 'step-rejected';
+  if (step === 'offer') return 'step-offer';
+  if (String(step).startsWith('interview_')) return 'step-interview';
+  return '';
+}
+
+function formatNodeTime(at) {
+  if (!at) return '—';
+  // "YYYY-MM-DD HH:MM" → "MM-DD\nHH:MM"
+  const m = String(at).match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!m) return escHtml(at);
+  return `${m[2]}-${m[3]}<br>${m[4]}:${m[5]}`;
+}
+
+function nextTimelineActions(timeline) {
+  if (!timeline.length) {
+    return [{ step: 'applied', label: '+ Applied', cls: 'btn-apply-step' }];
+  }
+  const last = timeline[timeline.length - 1].step;
+  if (TERMINAL_STEPS.has(last)) return [];
+
+  const actions = [];
+  if (last === 'applied') {
+    actions.push({ step: 'interview_invite', label: '+ Invite', cls: 'btn-interview-step' });
+    actions.push({ step: 'rejected', label: '+ Rejected', cls: 'btn-reject-step' });
+    return actions;
+  }
+  if (last === 'interview_invite') {
+    actions.push({ step: 'interview_1', label: '+ Round 1', cls: 'btn-interview-step' });
+    actions.push({ step: 'rejected', label: '+ Rejected', cls: 'btn-reject-step' });
+    return actions;
+  }
+  const idx = INTERVIEW_STEPS.indexOf(last);
+  if (idx >= 0) {
+    if (idx < INTERVIEW_STEPS.length - 1) {
+      const next = INTERVIEW_STEPS[idx + 1];
+      actions.push({ step: next, label: `+ ${TIMELINE_LABEL[next]}`, cls: 'btn-interview-step' });
+    }
+    actions.push({ step: 'rejected', label: '+ Rejected', cls: 'btn-reject-step' });
+    actions.push({ step: 'offer', label: '+ Offer', cls: 'btn-offer-step' });
+  }
+  return actions;
+}
+
+function renderProgressBlock(job) {
+  const id = job._id;
+  const timeline = Array.isArray(job.application_timeline) ? job.application_timeline.slice() : [];
+  jobTimelines[id] = timeline;
+  const status = job.status || 'pending';
+  const sideVal = (status === 'unsuitable' || status === 'closed') ? status : '';
+
+  let trackHtml = '';
+  if (!timeline.length) {
+    trackHtml = `<div class="progress-empty">No application yet — record when you applied below</div>`;
+  } else {
+    trackHtml = timeline.map((ev, i) => {
+      const label = TIMELINE_LABEL[ev.step] || ev.label || ev.step;
+      const lineCls = i < timeline.length - 1
+        ? `progress-line done${timeline[i + 1].step === 'rejected' ? ' end-rejected' : timeline[i + 1].step === 'offer' ? ' end-offer' : ''}`
+        : '';
+      return `
+        <button type="button" class="progress-node ${timelineStepClass(ev.step)}"
+                title="Click to edit time"
+                onclick="editTimelineStep('${id}', ${i})">
+          <div class="node-label">${escHtml(label)}</div>
+          <div class="node-dot"></div>
+          <div class="node-time">${formatNodeTime(ev.at)}</div>
+        </button>
+        ${lineCls ? `<div class="${lineCls}"></div>` : ''}
+      `;
+    }).join('');
+  }
+
+  const actions = nextTimelineActions(timeline);
+  const actionBtns = actions.map(a =>
+    `<button type="button" class="progress-btn ${a.cls}" onclick="addTimelineStep('${id}', '${a.step}')">${a.label}</button>`
+  ).join('');
+  const undoBtn = timeline.length
+    ? `<button type="button" class="progress-btn btn-undo" onclick="undoTimelineStep('${id}')">↩ Undo</button>`
+    : '';
+
+  return `
+    <div class="progress-wrap" data-id="${id}" id="progress-${id}" onclick="event.stopPropagation()">
+      <div class="progress-title">Application Progress</div>
+      <div class="progress-track">${trackHtml}</div>
+      <div class="progress-actions">
+        ${actionBtns}
+        ${undoBtn}
+      </div>
+      <div class="progress-side">
+        <span class="progress-side-label">Other</span>
+        <select class="status-side-select" data-id="${id}" onchange="updateSideStatus(this)">
+          <option value="" ${!sideVal ? 'selected' : ''}>—</option>
+          <option value="unsuitable" ${sideVal==='unsuitable' ? 'selected':''}>🚫 Unsuitable</option>
+          <option value="closed" ${sideVal==='closed' ? 'selected':''}>🔒 Closed</option>
+          <option value="pending">📋 Reset Not Applied</option>
+        </select>
+      </div>
+    </div>
+  `;
 }
 
 /* ── Load jobs ───────────────────────────────────────────────────── */
@@ -1410,44 +2183,168 @@ async function loadJobs() {
   }
 }
 
-/* ── Update status ───────────────────────────────────────────────── */
-async function updateStatus(select) {
-  const id     = select.dataset.id;
-  const status = select.value;
+/* ── Application timeline ────────────────────────────────────────── */
+function nowLocalInputValue() {
+  const d = new Date();
+  d.setSeconds(0, 0);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
-  // Update style immediately
-  select.className = `status-select s-${status}`;
+function toLocalInputValue(at) {
+  if (!at) return nowLocalInputValue();
+  const m = String(at).match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!m) return nowLocalInputValue();
+  return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}`;
+}
 
-  // Sync compact-row status pill
-  const card = select.closest('.card');
-  const pill = card && card.querySelector('[data-status-pill]');
+function fromLocalInputValue(v) {
+  if (!v) return '';
+  return v.replace('T', ' ');
+}
+
+function askTimelineTime({ title, hint, initial }) {
+  return new Promise(resolve => {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'tl-modal-backdrop';
+    backdrop.innerHTML = `
+      <div class="tl-modal" role="dialog" aria-modal="true">
+        <h3>${escHtml(title)}</h3>
+        <p>${escHtml(hint || 'Pick the date and time for this step')}</p>
+        <input type="datetime-local" id="tlDatetimeInput" value="${initial || nowLocalInputValue()}" />
+        <div class="tl-modal-actions">
+          <button type="button" class="tl-cancel">Cancel</button>
+          <button type="button" class="tl-confirm">Save</button>
+        </div>
+      </div>`;
+    document.body.appendChild(backdrop);
+    const input = backdrop.querySelector('#tlDatetimeInput');
+    const close = (val) => { backdrop.remove(); resolve(val); };
+    backdrop.querySelector('.tl-cancel').onclick = () => close(null);
+    backdrop.querySelector('.tl-confirm').onclick = () => close(fromLocalInputValue(input.value));
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(null); });
+    input.focus();
+  });
+}
+
+function refreshProgressUI(jobId, timeline, status) {
+  jobTimelines[jobId] = timeline;
+  const card = document.getElementById(`card-${jobId}`);
+  if (!card) return;
+
+  const wrap = card.querySelector(`#progress-${jobId}`);
+  if (wrap) {
+    const fakeJob = { _id: jobId, application_timeline: timeline, status };
+    wrap.outerHTML = renderProgressBlock(fakeJob);
+  }
+
+  const pill = card.querySelector('[data-status-pill]');
   if (pill) {
     pill.className = `status-pill s-${status}`;
     pill.textContent = STATUS_LABEL[status] || status;
+  }
+
+  const btn = card.querySelector('.btn-apply');
+  if (btn) {
+    const appliedLike = ['applied', 'interview', 'rejected', 'offer'].includes(status);
+    btn.classList.toggle('btn-applied', appliedLike);
+    btn.innerHTML = appliedLike ? '🔗 View Detail' : '🚀 Apply Now';
+  }
+}
+
+async function saveTimeline(jobId, timeline) {
+  const res = await fetch(`/api/jobs/${jobId}/timeline`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ timeline }),
+  });
+  if (!res.ok) throw new Error('Request failed');
+  const data = await res.json();
+  refreshProgressUI(jobId, data.application_timeline || timeline, data.status);
+  loadStats();
+  loadJourney();
+  loadDailyStats();
+  return data;
+}
+
+async function addTimelineStep(jobId, step) {
+  const label = TIMELINE_LABEL[step] || step;
+  const at = await askTimelineTime({
+    title: `Record: ${label}`,
+    hint: step === 'applied'
+      ? 'When did you apply for this job?'
+      : step === 'interview_invite'
+        ? 'When did you receive the interview invitation?'
+        : `When did you get the “${label}” update?`,
+    initial: nowLocalInputValue(),
+  });
+  if (!at) return;
+
+  const timeline = (jobTimelines[jobId] || []).slice();
+  timeline.push({ step, at });
+  try {
+    await saveTimeline(jobId, timeline);
+    showToast(`✅ Recorded ${label} · ${at}`);
+  } catch (err) {
+    showToast('❌ Failed to update progress', 'err');
+  }
+}
+
+async function editTimelineStep(jobId, index) {
+  const timeline = (jobTimelines[jobId] || []).slice();
+  const ev = timeline[index];
+  if (!ev) return;
+  const label = TIMELINE_LABEL[ev.step] || ev.step;
+  const at = await askTimelineTime({
+    title: `Edit time: ${label}`,
+    hint: 'Update the date and time for this step',
+    initial: toLocalInputValue(ev.at),
+  });
+  if (!at) return;
+
+  timeline[index] = { ...ev, at };
+  try {
+    await saveTimeline(jobId, timeline);
+    showToast(`✅ Updated ${label} · ${at}`);
+  } catch (err) {
+    showToast('❌ Failed to update time', 'err');
+  }
+}
+
+async function undoTimelineStep(jobId) {
+  const timeline = (jobTimelines[jobId] || []).slice();
+  if (!timeline.length) return;
+  const removed = timeline.pop();
+  try {
+    await saveTimeline(jobId, timeline);
+    showToast(`↩ Undid ${TIMELINE_LABEL[removed.step] || removed.step}`);
+  } catch (err) {
+    showToast('❌ Undo failed', 'err');
+  }
+}
+
+async function updateSideStatus(select) {
+  const id = select.dataset.id;
+  const status = select.value;
+  if (!status) {
+    // Revert select to current derived status display
+    select.value = '';
+    return;
   }
 
   try {
     const res = await fetch(`/api/jobs/${id}/status`, {
       method: 'PATCH',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({status}),
+      body: JSON.stringify({ status }),
     });
     if (!res.ok) throw new Error('Request failed');
+    const timeline = status === 'pending' ? [] : (status === 'unsuitable' || status === 'closed' ? [] : (jobTimelines[id] || []));
+    refreshProgressUI(id, timeline, status);
     showToast(`✅ Status updated to "${STATUS_LABEL[status]}"`);
     loadStats();
+    loadJourney();
     loadDailyStats();
-
-    // Immediately update the Apply Now ↔ View Detail button on the card
-    const btn = select.closest('.status-row').previousElementSibling;
-    if (btn && btn.classList.contains('btn-apply')) {
-      if (status === 'applied') {
-        btn.classList.add('btn-applied');
-        btn.innerHTML = '🔗 View Detail';
-      } else {
-        btn.classList.remove('btn-applied');
-        btn.innerHTML = '🚀 Apply Now';
-      }
-    }
   } catch (err) {
     showToast('❌ Status update failed', 'err');
   }
@@ -1567,9 +2464,32 @@ function escHtml(str) {
 /* ── Init ────────────────────────────────────────────────────────── */
 function refreshAll() {
   loadStats();
+  loadJourney();
   loadDailyStats();
   loadJobs();
 }
+
+// Auto-refresh the page when HTML templates change (no server restart needed)
+(function setupTemplateHotReload() {
+  let token = null;
+  async function check() {
+    try {
+      const res = await fetch('/api/dev/reload-token', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (token === null) {
+        token = data.token;
+        return;
+      }
+      if (data.token && data.token !== token) {
+        token = data.token;
+        location.reload();
+      }
+    } catch (_) {}
+  }
+  setInterval(check, 1500);
+  check();
+})();
 
 // Date input listeners – debounced so the native picker doesn't fire mid-pick
 ['dateFrom', 'dateTo'].forEach(id => {
@@ -1582,6 +2502,7 @@ function refreshAll() {
 });
 
 loadStats();
+loadJourney();
 loadDailyStats();
 setLayout(currentLayout);
 loadJobs();

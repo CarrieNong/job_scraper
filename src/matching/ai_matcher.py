@@ -473,9 +473,10 @@ def save_matched_job(job: Dict, analysis: Dict) -> bool:
             **_analysis_fields(analysis),
             
             # Metadata
-            "status": "pending",  # pending, applied, rejected, interview
+            "status": "pending",  # pending, applied, interview, rejected, offer, …
             "matched_at": datetime.utcnow(),
             "applied_at": None,
+            "application_timeline": [],
             "notes": "",
         }
         

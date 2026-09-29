@@ -8,6 +8,7 @@ PORT="${1:-5050}"
 cd "$PROJECT_DIR" || exit 1
 
 echo "🌐 Starting Job Tracker UI at http://127.0.0.1:${PORT}"
+echo "   HTML templates hot-reload automatically — edit & save, browser refreshes."
 echo "   Press Ctrl+C to stop."
 echo ""
 

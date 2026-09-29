@@ -272,7 +272,7 @@ def get_scraper_stats() -> dict:
 
 
 # Statuses that mean the user has submitted an application
-APPLIED_STATUSES = ("applied", "rejected", "interview")
+APPLIED_STATUSES = ("applied", "rejected", "interview", "offer")
 
 
 def get_daily_activity_stats(days: int = 120) -> list:

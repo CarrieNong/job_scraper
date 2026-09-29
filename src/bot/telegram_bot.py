@@ -38,6 +38,7 @@ STATUS_LABELS = {
     "applied": "Applied",
     "rejected": "Rejected",
     "interview": "Interview",
+    "offer": "Offer",
     "unsuitable": "Unsuitable",
     "closed": "Closed",
 }

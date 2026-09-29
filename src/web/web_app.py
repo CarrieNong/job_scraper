@@ -6,6 +6,7 @@ Flask web app to view and manage matched jobs
 import sys
 import os
 from datetime import datetime
+from typing import Optional
 from bson import ObjectId
 import json
 
@@ -35,6 +36,30 @@ app = Flask(
     template_folder=os.path.join(_PROJECT_ROOT, "templates"),
     static_folder=os.path.join(_PROJECT_ROOT, "static"),
 )
+# Always pick up HTML/template edits without restarting the server
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.jinja_env.auto_reload = True
+
+# Steps that mean a job has interview progress (show as company track)
+JOURNEY_INTERVIEW_STEPS = frozenset({
+    "interview_invite",
+    "interview_1",
+    "interview_2",
+    "interview_3",
+    "interview_final",
+    "offer",
+})
+# All steps shown on a company track (including Applied / Rejected)
+JOURNEY_TRACK_STEPS = frozenset({
+    "applied",
+    "interview_invite",
+    "interview_1",
+    "interview_2",
+    "interview_3",
+    "interview_final",
+    "rejected",
+    "offer",
+})
 
 # ─── Status mapping ───────────────────────────────────────────────────────────
 # DB value → English label
@@ -43,9 +68,31 @@ STATUS_MAP = {
     "applied":    "Applied",
     "rejected":   "Rejected",
     "interview":  "Interview",
+    "offer":      "Offer",
     "unsuitable": "Unsuitable",
     "closed":     "Closed",
 }
+
+# Application progress timeline steps (ordered interview track)
+TIMELINE_STEPS = {
+    "applied":         "Applied",
+    "interview_invite": "Invite",
+    "interview_1":     "Round 1",
+    "interview_2":     "Round 2",
+    "interview_3":     "Round 3",
+    "interview_final": "Final",
+    "rejected":        "Rejected",
+    "offer":           "Offer",
+}
+
+TIMELINE_STEP_ORDER = (
+    "applied",
+    "interview_invite",
+    "interview_1",
+    "interview_2",
+    "interview_3",
+    "interview_final",
+)
 
 # Unmatched jobs user_status mapping (for 6-7 score borderline jobs)
 UNMATCHED_USER_STATUS_MAP = {
@@ -58,6 +105,81 @@ STATUS_REVERSE = {v: k for k, v in STATUS_MAP.items()}
 
 MATCH_THRESHOLD = float(os.getenv("MATCH_THRESHOLD", "7.0"))
 UNMATCHED_PAGE_SIZE = 20
+
+
+def _parse_timeline_at(value) -> Optional[datetime]:
+    """Parse a timeline timestamp from ISO / 'YYYY-MM-DD HH:MM' / datetime."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value
+    text = str(value).strip().replace("T", " ")
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _format_timeline_at(value) -> str:
+    dt = _parse_timeline_at(value)
+    return dt.strftime("%Y-%m-%d %H:%M") if dt else ""
+
+
+def _status_from_timeline(timeline: list, fallback: str = "pending") -> str:
+    """Derive matched_jobs.status from the latest timeline step."""
+    if not timeline:
+        return fallback if fallback in ("unsuitable", "closed", "pending") else "pending"
+    last = timeline[-1].get("step", "")
+    if last == "applied":
+        return "applied"
+    if last.startswith("interview_"):
+        return "interview"
+    if last == "rejected":
+        return "rejected"
+    if last == "offer":
+        return "offer"
+    return fallback
+
+
+def _normalize_timeline(raw) -> list:
+    """Validate & normalise a timeline payload into [{step, at}, ...]."""
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        step = item.get("step")
+        if step not in TIMELINE_STEPS:
+            continue
+        at = _parse_timeline_at(item.get("at")) or datetime.now()
+        out.append({"step": step, "at": at})
+    return out
+
+
+def _hydrate_timeline(job: dict) -> list:
+    """Return timeline list; seed from applied_at for older records."""
+    timeline = job.get("application_timeline")
+    if isinstance(timeline, list) and timeline:
+        return timeline
+    status = job.get("status") or "pending"
+    # Do not invent progress for side / reset statuses
+    if status in ("unsuitable", "closed", "pending"):
+        return []
+    # Backfill: older records only had a flat status (+ applied_at)
+    if job.get("applied_at") or status in APPLIED_STATUSES:
+        at = job.get("applied_at") or job.get("updated_at") or job.get("matched_at")
+        seeded = [{"step": "applied", "at": at or datetime.now()}]
+        if status == "rejected":
+            seeded.append({"step": "rejected", "at": job.get("updated_at") or at or datetime.now()})
+        elif status == "offer":
+            seeded.append({"step": "offer", "at": job.get("updated_at") or at or datetime.now()})
+        elif status == "interview":
+            seeded.append({"step": "interview_1", "at": job.get("updated_at") or at or datetime.now()})
+        return seeded
+    return []
 
 
 def _normalize_link(job: dict) -> str:
@@ -94,6 +216,17 @@ def _serialize(job: dict) -> dict:
     job.setdefault("notes", "")
     # Ensure status always exists
     job.setdefault("status", "pending")
+    # Hydrate / serialise application timeline
+    timeline = _hydrate_timeline(job)
+    job["application_timeline"] = [
+        {
+            "step": item["step"],
+            "label": TIMELINE_STEPS.get(item["step"], item["step"]),
+            "at": _format_timeline_at(item.get("at")),
+        }
+        for item in timeline
+        if isinstance(item, dict) and item.get("step") in TIMELINE_STEPS
+    ]
     return job
 
 
@@ -235,8 +368,63 @@ def api_update_status(job_id: str):
     if new_status in APPLIED_STATUSES and not job.get("applied_at"):
         update_fields["applied_at"] = now
 
+    # Side statuses (unsuitable/closed/pending) clear progress; others keep timeline
+    if new_status in ("unsuitable", "closed", "pending"):
+        update_fields["application_timeline"] = []
+        if new_status == "pending":
+            update_fields["applied_at"] = None
+
     collection.update_one({"_id": oid}, {"$set": update_fields})
     return jsonify({"ok": True, "status": new_status})
+
+
+@app.route("/api/jobs/<job_id>/timeline", methods=["PATCH"])
+def api_update_timeline(job_id: str):
+    """Replace the application progress timeline and sync status / applied_at."""
+    data = request.get_json(silent=True) or {}
+    timeline = _normalize_timeline(data.get("timeline", []))
+
+    try:
+        oid = ObjectId(job_id)
+    except Exception:
+        return jsonify({"error": "Invalid job ID"}), 400
+
+    collection = get_collection("matched_jobs")
+    job = collection.find_one({"_id": oid})
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    now = datetime.now()
+    prev_status = job.get("status", "pending")
+    # Keep unsuitable/closed only when timeline is empty; otherwise derive from steps
+    fallback = prev_status if prev_status in ("unsuitable", "closed") and not timeline else "pending"
+    new_status = _status_from_timeline(timeline, fallback=fallback)
+
+    update_fields = {
+        "application_timeline": timeline,
+        "status": new_status,
+        "updated_at": now,
+    }
+
+    applied_event = next((e for e in timeline if e["step"] == "applied"), None)
+    if applied_event:
+        update_fields["applied_at"] = applied_event["at"]
+    elif new_status not in APPLIED_STATUSES:
+        update_fields["applied_at"] = None
+    elif not job.get("applied_at") and timeline:
+        update_fields["applied_at"] = timeline[0]["at"]
+
+    collection.update_one({"_id": oid}, {"$set": update_fields})
+
+    serialized = [
+        {
+            "step": e["step"],
+            "label": TIMELINE_STEPS[e["step"]],
+            "at": _format_timeline_at(e["at"]),
+        }
+        for e in timeline
+    ]
+    return jsonify({"ok": True, "status": new_status, "application_timeline": serialized})
 
 
 @app.route("/api/jobs/<job_id>/notes", methods=["PATCH"])
@@ -341,6 +529,7 @@ def api_update_unmatched_status(job_id: str):
                     "status":         "pending",
                     "matched_at":     now,   # use NOW so it appears at top of list
                     "applied_at":     None,
+                    "application_timeline": [],
                     "notes":          "",
                     "created_at":     now,
                     "from_unmatched": True,
@@ -401,7 +590,163 @@ def api_stats_daily():
         days = int(request.args.get("days", 120))
     except (TypeError, ValueError):
         days = 120
+    days = max(7, min(days, 366))
     return jsonify({"days": get_daily_activity_stats(days=days)})
+
+
+@app.route("/api/journey")
+def api_journey():
+    """
+    Application Journey:
+    - Overview line: first apply date → today + total applied count
+    - Company tracks: only jobs with interview invite / rounds / offer,
+      each showing the full step timeline (Applied → Invite → Rounds …)
+    """
+    collection = get_collection("matched_jobs")
+    jobs = list(collection.find({
+        "$or": [
+            {"applied_at": {"$ne": None}},
+            {"status": {"$in": list(APPLIED_STATUSES)}},
+            {"application_timeline.0": {"$exists": True}},
+        ]
+    }))
+
+    total_applied = 0
+    first_applied = None
+    tracks = []
+
+    for job in jobs:
+        jid = str(job.get("_id"))
+        company = job.get("company") or "Unknown"
+        title = job.get("title") or ""
+        raw_timeline = job.get("application_timeline") if isinstance(job.get("application_timeline"), list) else []
+
+        steps = []
+        for item in raw_timeline:
+            if not isinstance(item, dict):
+                continue
+            step = item.get("step")
+            if step not in JOURNEY_TRACK_STEPS:
+                continue
+            at = _parse_timeline_at(item.get("at"))
+            if not at:
+                continue
+            steps.append({
+                "step": step,
+                "label": TIMELINE_STEPS.get(step, step),
+                "at": _format_timeline_at(at),
+                "date": at.strftime("%Y-%m-%d"),
+                "_dt": at,
+            })
+
+        # Resolve applied date for overview count
+        applied_at = next((s["_dt"] for s in steps if s["step"] == "applied"), None)
+        if not applied_at:
+            applied_at = _parse_timeline_at(job.get("applied_at"))
+        if not applied_at and job.get("status") in APPLIED_STATUSES:
+            applied_at = _parse_timeline_at(job.get("updated_at") or job.get("matched_at"))
+
+        if applied_at:
+            total_applied += 1
+            if first_applied is None or applied_at < first_applied:
+                first_applied = applied_at
+            # Ensure Applied is on the track when we have a date
+            if not any(s["step"] == "applied" for s in steps):
+                steps.insert(0, {
+                    "step": "applied",
+                    "label": TIMELINE_STEPS["applied"],
+                    "at": _format_timeline_at(applied_at),
+                    "date": applied_at.strftime("%Y-%m-%d"),
+                    "_dt": applied_at,
+                })
+
+        # Backfill old flat interview/offer status without detailed timeline
+        if not any(s["step"] in JOURNEY_INTERVIEW_STEPS for s in steps):
+            if job.get("status") == "interview":
+                at = _parse_timeline_at(job.get("updated_at") or applied_at) or datetime.now()
+                steps.append({
+                    "step": "interview_invite",
+                    "label": TIMELINE_STEPS["interview_invite"],
+                    "at": _format_timeline_at(at),
+                    "date": at.strftime("%Y-%m-%d"),
+                    "_dt": at,
+                })
+            elif job.get("status") == "offer":
+                at = _parse_timeline_at(job.get("updated_at") or applied_at) or datetime.now()
+                steps.append({
+                    "step": "offer",
+                    "label": TIMELINE_STEPS["offer"],
+                    "at": _format_timeline_at(at),
+                    "date": at.strftime("%Y-%m-%d"),
+                    "_dt": at,
+                })
+
+        has_interview = any(s["step"] in JOURNEY_INTERVIEW_STEPS for s in steps)
+        if not has_interview:
+            continue
+
+        steps.sort(key=lambda s: s["_dt"])
+        for s in steps:
+            s.pop("_dt", None)
+
+        last_dt = _parse_timeline_at(steps[-1]["at"]) if steps else None
+        tracks.append({
+            "job_id": jid,
+            "company": company,
+            "title": title,
+            "status": job.get("status") or "pending",
+            "steps": steps,
+            "_sort": last_dt or datetime.min,
+        })
+
+    tracks.sort(key=lambda t: t["_sort"], reverse=True)
+    for t in tracks:
+        t.pop("_sort", None)
+
+    today_dt = datetime.now()
+    today = today_dt.strftime("%Y-%m-%d")
+    start_date = first_applied.strftime("%Y-%m-%d") if first_applied else today
+
+    # Axis end = later of today and the latest interview/event date (so future rounds sit on the scale)
+    end_dt = today_dt
+    for t in tracks:
+        for s in t.get("steps") or []:
+            at = _parse_timeline_at(s.get("at") or s.get("date"))
+            if at and at > end_dt:
+                end_dt = at
+    end_date = end_dt.strftime("%Y-%m-%d")
+
+    duration_days = 0
+    if first_applied:
+        duration_days = (end_dt.date() - first_applied.date()).days
+
+    return jsonify({
+        "start_date": start_date,
+        "end_date": end_date,
+        "today": today,
+        "duration_days": duration_days,
+        "total_applied": total_applied,
+        "tracks": tracks,
+    })
+
+
+@app.route("/api/dev/reload-token")
+def api_dev_reload_token():
+    """Return latest mtime of HTML templates so the browser can auto-refresh."""
+    templates_dir = app.template_folder or ""
+    latest = 0.0
+    try:
+        for name in os.listdir(templates_dir):
+            if not name.endswith((".html", ".htm")):
+                continue
+            path = os.path.join(templates_dir, name)
+            try:
+                latest = max(latest, os.path.getmtime(path))
+            except OSError:
+                continue
+    except OSError:
+        pass
+    return jsonify({"token": str(int(latest * 1000))})
 
 
 # ─── Manual-apply endpoint ────────────────────────────────────────────────────
