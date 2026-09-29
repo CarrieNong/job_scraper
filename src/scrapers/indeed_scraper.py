@@ -31,6 +31,9 @@ from core.scraper_utils import (
     should_skip_title_before_click,
     is_non_english_job_detail,
     strip_html,
+    normalize_indeed_job_id,
+    extract_indeed_jk_from_url,
+    extract_indeed_detail_meta,
 )
 
 # Indeed configuration
@@ -107,14 +110,17 @@ def extract_card_fields(card):
         title = safe_text(title_heading)
 
     link = title_heading.locator("a").first
-    job_id = safe_attr(link, "id")
     href = safe_attr(link, "href")
     if href and href.startswith("/"):
         href = f"https://de.indeed.com{href}"
-    elif not href and job_id:
-        # Fallback: Indeed job keys are often usable as jk=
-        jk = job_id.replace("job_", "").replace("sj_", "")
-        href = f"https://de.indeed.com/viewjob?jk={jk}"
+
+    # Prefer jk= from the href; fall back to DOM id (job_ / sj_ prefix stripped).
+    job_id = extract_indeed_jk_from_url(href or "")
+    if not job_id:
+        job_id = normalize_indeed_job_id(safe_attr(link, "id") or "")
+
+    if not href and job_id:
+        href = f"https://de.indeed.com/viewjob?jk={job_id}"
 
     return title, job_id, href
 
@@ -171,10 +177,31 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
             pause(1.0, 2.0)
 
             detail = page.locator(DETAIL_SELECTOR).first
-            description = strip_html(detail.inner_html(timeout=10000) or "")
+            description = ""
+            for sel in (
+                "#jobDescriptionText",
+                ".jobsearch-JobComponent-description",
+                ".simple-job-description-html",
+                DETAIL_SELECTOR,
+            ):
+                try:
+                    loc = page.locator(sel).first
+                    if loc.count() == 0:
+                        continue
+                    html = loc.inner_html(timeout=10000) or ""
+                    description = strip_html(html)
+                    if description:
+                        break
+                except Exception:
+                    continue
+            if not description:
+                description = strip_html(detail.inner_html(timeout=10000) or "")
+
+            company, location = extract_indeed_detail_meta(page)
             should_skip, lang, german_share = is_non_english_job_detail(description)
             print(
                 f"Job {index + 1}: description length {len(description)}, "
+                f"company={company or '(none)'}, location={location or '(none)'}, "
                 f"language={lang or 'unknown'}, german_share={german_share:.0%}"
             )
 
@@ -185,11 +212,10 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
                     f"skip save (german_filtered)"
                 )
             else:
-                # company / location / applicants are left empty for now.
                 job_data = {
                     "title": title,
-                    "company": "",
-                    "location": "",
+                    "company": company,
+                    "location": location,
                     "status": "new",
                     "link": href_value,
                     "job_id": job_id,

@@ -31,6 +31,116 @@ _EXCLUDE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in TITLE_EXCLUDE_KEYWORD
 # Normalize hyphens/underscores so "full-stack" matches "Full Stack"
 _KEYWORD_SPLIT = re.compile(r"[-_\s]+")
 
+# Indeed job keys (jk) appear in URLs and as DOM ids with job_/sj_ prefixes.
+_INDEED_JK_RE = re.compile(r"[?&]jk=([a-zA-Z0-9]+)")
+_INDEED_ID_PREFIXES = ("job_", "sj_")
+
+
+def normalize_indeed_job_id(raw: str) -> str:
+    """Strip Indeed DOM id prefixes (job_ / sj_) down to the bare job key."""
+    if not raw:
+        return ""
+    value = str(raw).strip()
+    for prefix in _INDEED_ID_PREFIXES:
+        if value.startswith(prefix):
+            return value[len(prefix):]
+    return value
+
+
+def indeed_job_id_variants(job_id: str) -> list:
+    """Bare jk plus legacy prefixed forms for DB lookups / dedup."""
+    bare = normalize_indeed_job_id(job_id)
+    if not bare:
+        return []
+    return [bare, f"job_{bare}", f"sj_{bare}"]
+
+
+def extract_indeed_jk_from_url(url: str) -> str:
+    """Extract the Indeed job key from a viewjob / rc/clk URL."""
+    if not url:
+        return ""
+    m = _INDEED_JK_RE.search(url)
+    return m.group(1) if m else ""
+
+
+_INDEED_LOCATION_SKIP = {
+    "vollzeit",
+    "teilzeit",
+    "full-time",
+    "part-time",
+    "full time",
+    "part time",
+    "hybrides arbeiten",
+    "hybrid",
+    "remote",
+    "homeoffice",
+    "home office",
+    "befristet",
+    "unbefristet",
+}
+
+
+def extract_indeed_detail_meta(scope) -> tuple:
+    """
+    Pull company + location from an Indeed job-detail panel.
+
+    Indeed puts these in the sticky/compact header
+    ([data-testid="company-info-metadata"]), not in the JD body —
+    so scrapers that only store description leave them empty.
+
+    Args:
+        scope: Playwright Page or Locator that contains the detail panel
+
+    Returns:
+        (company, location) — either may be ""
+    """
+    company = (
+        safe_text(scope.locator('[data-testid="company-info-metadata"] a[href*="/cmp/"]'))
+        or safe_text(scope.locator('[data-testid="desktop-job-header"] a[href*="/cmp/"]'))
+        or safe_text(scope.locator('[data-testid="desktop-embedded-compact-header"] a[href*="/cmp/"]'))
+        or safe_text(scope.locator('a[href*="/cmp/"]'))
+    )
+
+    location = ""
+
+    # Compact header often has a single line: "Berlin • Hybrides Arbeiten"
+    compact = scope.locator('[data-testid="desktop-embedded-compact-header"]')
+    if compact.count() > 0:
+        compact_text = safe_text(compact)
+        for line in compact_text.splitlines():
+            line = line.strip()
+            if "•" in line and company and company not in line:
+                location = line.split("•", 1)[0].strip()
+                break
+            if "•" in line and not line.startswith("•"):
+                # "Berlin • Hybrides Arbeiten" (company is a separate <a>)
+                left = line.split("•", 1)[0].strip()
+                if left and left != company:
+                    location = left
+                    break
+
+    if not location:
+        meta = scope.locator('[data-testid="company-info-metadata"]')
+        if meta.count() > 0:
+            lines = [
+                ln.strip()
+                for ln in safe_text(meta).splitlines()
+                if ln.strip() and ln.strip() != "•"
+            ]
+            if company and lines and lines[0] == company:
+                lines = lines[1:]
+            for ln in lines:
+                if "•" in ln:
+                    ln = ln.split("•", 1)[0].strip()
+                if not ln or ln == company:
+                    continue
+                if ln.lower() in _INDEED_LOCATION_SKIP:
+                    continue
+                location = ln
+                break
+
+    return company, location
+
 # Too little text to classify reliably (failed/empty detail panels).
 _MIN_LANG_CHARS = 40
 

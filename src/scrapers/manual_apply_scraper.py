@@ -46,7 +46,15 @@ import trafilatura
 
 from core.db_mongo import init_db, get_collection, mark_job_as_matched, save_job
 from matching.ai_matcher import analyze_job_with_ai, load_user_profile, load_matching_criteria, _analysis_fields
-from core.scraper_utils import connect_browser, strip_html, pause, is_non_english_job_detail, safe_text
+from core.scraper_utils import (
+    connect_browser,
+    strip_html,
+    pause,
+    is_non_english_job_detail,
+    safe_text,
+    extract_indeed_jk_from_url,
+    extract_indeed_detail_meta,
+)
 from core.config import INDEED_CONFIG
 
 # Minimum chars of extracted body text before we treat a generic page as a JD
@@ -89,14 +97,8 @@ def extract_linkedin_job_id(url: str) -> Optional[str]:
 
 
 def extract_indeed_job_id(url: str) -> Optional[str]:
-    m = re.search(r"[?&]jk=([a-zA-Z0-9]+)", url)
-    if m:
-        return m.group(1)
-    # /viewjob?jk=xxx or /rc/clk?jk=xxx
-    m = re.search(r"jk=([a-zA-Z0-9]+)", url)
-    if m:
-        return m.group(1)
-    return None
+    jk = extract_indeed_jk_from_url(url or "")
+    return jk or None
 
 
 # ── per-source scrapers ───────────────────────────────────────────────────────
@@ -269,17 +271,19 @@ def scrape_indeed_job(page, url: str) -> Optional[dict]:
 
     pause(1.5, 2.5)
 
-    # title / company / location are left empty here.
-    # AI will infer them from the description text in process_urls.
-    title = ""
-    company = ""
-    location = ""
+    # Prefer DOM header fields; AI inference remains a fallback in process_urls.
+    company, location = extract_indeed_detail_meta(page)
+    title = safe_text(page.locator('[data-testid="vj-job-title"]')) or ""
 
     # ── Description ───────────────────────────────────────────────────────
-    # Grab everything inside [data-testid="viewjob-main-content"] (the full
-    # job-detail container) and strip all HTML/CSS before storing.
+    # Prefer the JD body; fall back to the full detail container.
     description = ""
-    for sel in [_INDEED_DETAIL_SELECTOR, "#jobDescriptionText"]:
+    for sel in [
+        "#jobDescriptionText",
+        ".jobsearch-JobComponent-description",
+        ".simple-job-description-html",
+        _INDEED_DETAIL_SELECTOR,
+    ]:
         try:
             loc = page.locator(sel).first
             if loc.count() > 0:

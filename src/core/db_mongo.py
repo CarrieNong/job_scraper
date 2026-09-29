@@ -4,6 +4,8 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 
+from core.scraper_utils import indeed_job_id_variants
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -99,7 +101,16 @@ def is_job_id_exists(job_id, source="linkedin"):
     """
     db = get_db()
     collection = db[COLLECTION_NAME]
-    
+
+    # Indeed historically stored DOM ids with job_/sj_ prefixes; accept all forms.
+    if source == "indeed":
+        variants = indeed_job_id_variants(job_id)
+        if variants:
+            count = collection.count_documents(
+                {"job_id": {"$in": variants}, "source": source}
+            )
+            return count > 0
+
     count = collection.count_documents({"job_id": job_id, "source": source})
     return count > 0
 

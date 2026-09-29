@@ -24,7 +24,7 @@ from core.db_mongo import (
     is_job_id_exists,
     mark_job_as_matched,
 )
-from core.scraper_utils import strip_html
+from core.scraper_utils import strip_html, indeed_job_id_variants
 from matching.german_gate import (
     find_mandatory_german_requirement,
     german_disqualification_analysis,
@@ -452,8 +452,13 @@ def save_matched_job(job: Dict, analysis: Dict) -> bool:
     try:
         matched_jobs = get_collection("matched_jobs")
         
-        # Check if already exists
-        if matched_jobs.find_one({"job_id": job["job_id"], "source": job["source"]}):
+        # Check if already exists (Indeed: also match legacy job_/sj_ prefixes)
+        existing_query = {"job_id": job["job_id"], "source": job["source"]}
+        if job.get("source") == "indeed":
+            variants = indeed_job_id_variants(job["job_id"])
+            if variants:
+                existing_query = {"job_id": {"$in": variants}, "source": "indeed"}
+        if matched_jobs.find_one(existing_query):
             print(f"Matched job {job['job_id']} already exists, skip")
             return False
         
