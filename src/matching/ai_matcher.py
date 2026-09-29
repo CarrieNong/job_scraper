@@ -142,7 +142,7 @@ Respond ONLY with valid JSON:
     "match_score": <number 0-10>,
     "recommendation": "<Yes/No/Maybe>",
     "special_match": <true if Special Match A/B/C applies, else false>,
-    "special_match_reasons": ["<Why this is a Special Match, e.g. Pure frontend + React full match", "Located in Leipzig">],
+    "special_match_reasons": ["<Why this is a Special Match, e.g. Pure frontend + React full match. Add 'Located in Leipzig' ONLY if Location/JD literally says Leipzig>"],
     "disqualification_reason": "<Only include this field if score ≤ 3, provide specific reason>",
     "what_youll_do": {{
         "matched": ["<responsibility the candidate can do>"],
@@ -297,6 +297,7 @@ EXAMPLE — Special Match, pure frontend in Leipzig (score 9.5–10):
 - Include "disqualification_reason" ONLY if score ≤ 3
 - List "nice_to_have_matches" for bonus skills the candidate HAS
 - special_match must be true for categories A/B/C; those scores must be 9–10, not 8
+- **Never invent a city.** "Located in Leipzig" / Leipzig bonus ONLY when Location or the JD literally contains Leipzig (or Leipzig-Halle / 04103). Berlin, Munich, Hamburg, remote-Germany, etc. are NOT Leipzig.
 """
     return prompt
 
@@ -334,7 +335,7 @@ def analyze_job_with_ai(
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a strict professional career advisor specializing in job matching. FIRST check whether German is an explicit mandatory job language (required / fluent / native / C1 / B2+). If yes, stop immediately: score 1–2, recommendation No, do not evaluate other skills. Otherwise parse each JD into 'what you'll do' and 'what they're looking for', then compare every item to the resume. Follow the Matching Criteria document in the user message exactly. Special Match A/B/C jobs must score 9–10 (not 8) with special_match=true. Respond only with valid JSON."
+                    "content": "You are a strict professional career advisor specializing in job matching. FIRST check whether German is an explicit mandatory job language (required / fluent / native / C1 / B2+). If yes, stop immediately: score 1–2, recommendation No, do not evaluate other skills. Otherwise parse each JD into 'what you'll do' and 'what they're looking for', then compare every item to the resume. Follow the Matching Criteria document in the user message exactly. Special Match A/B/C jobs must score 9–10 (not 8) with special_match=true. Never invent Leipzig or any other city — only claim Leipzig when Location or JD literally say Leipzig. Respond only with valid JSON."
                 },
                 {
                     "role": "user",
@@ -368,9 +369,59 @@ def _as_bool(value) -> bool:
 
 
 def _is_leipzig(job: Dict) -> bool:
-    """True if location (or title) clearly places the job in Leipzig."""
-    text = f"{job.get('location') or ''} {job.get('title') or ''}"
-    return bool(re.search(r"leipzig", text, re.I))
+    """True if location, title, or JD clearly places the job in Leipzig."""
+    text = " ".join(
+        [
+            str(job.get("location") or ""),
+            str(job.get("title") or ""),
+            strip_html(str(job.get("description") or ""))[:4000],
+        ]
+    )
+    if re.search(r"leipzig(?:\s*[-–]?\s*halle)?", text, re.I):
+        return True
+    # Leipzig urban postal codes (e.g. 04103); do not treat Berlin 10xxx as Leipzig.
+    if re.search(r"\b041\d{2}\b", text):
+        return True
+    return False
+
+
+_LEIPZIG_MENTION = re.compile(r"leipzig", re.I)
+
+
+def _strip_false_leipzig_claims(analysis: Dict) -> bool:
+    """
+    Remove invented Leipzig mentions from AI output.
+    Returns True if any Leipzig claim was removed.
+    """
+    removed = False
+
+    for key in (
+        "special_match_reasons",
+        "match_reasons",
+        "nice_to_have_matches",
+        "missing_requirements",
+        "red_flags",
+    ):
+        items = analysis.get(key) or []
+        if not isinstance(items, list):
+            continue
+        cleaned = [item for item in items if not _LEIPZIG_MENTION.search(str(item))]
+        if len(cleaned) != len(items):
+            removed = True
+            analysis[key] = cleaned
+
+    summary = str(analysis.get("summary") or "")
+    if _LEIPZIG_MENTION.search(summary):
+        cleaned_summary = re.sub(
+            r"[^.?!]*\b[Ll]eipzig\b[^.?!]*[.?!]?",
+            " ",
+            summary,
+        )
+        cleaned_summary = re.sub(r"\s{2,}", " ", cleaned_summary).strip()
+        analysis["summary"] = cleaned_summary
+        removed = True
+
+    return removed
 
 
 def _finalize_special_match(job: Dict, analysis: Dict) -> Dict:
@@ -382,10 +433,22 @@ def _finalize_special_match(job: Dict, analysis: Dict) -> Dict:
     elif not isinstance(raw_reasons, list):
         raw_reasons = []
     reasons = [str(item).strip() for item in raw_reasons if str(item).strip()]
+    analysis["special_match_reasons"] = reasons
 
     in_leipzig = _is_leipzig(job)
-    if special and in_leipzig and not any("leipzig" in r.lower() for r in reasons):
-        reasons.append("Located in Leipzig")
+    if not in_leipzig:
+        # Models often copy the Leipzig few-shot example onto Berlin/remote jobs.
+        false_leipzig = _strip_false_leipzig_claims(analysis)
+        reasons = [
+            str(item).strip()
+            for item in (analysis.get("special_match_reasons") or [])
+            if str(item).strip()
+        ]
+    else:
+        false_leipzig = False
+        if special and not any("leipzig" in r.lower() for r in reasons):
+            reasons.append("Located in Leipzig")
+            analysis["special_match_reasons"] = reasons
 
     try:
         score = float(analysis.get("match_score") or 0)
@@ -396,6 +459,9 @@ def _finalize_special_match(job: Dict, analysis: Dict) -> Dict:
         floor = 9.5 if in_leipzig else 9.0
         if score < floor:
             score = floor
+        # If AI invented a Leipzig bonus on a non-Leipzig job, drop the +0.5 band.
+        if false_leipzig and not in_leipzig and score >= 9.5:
+            score = 9.0
         score = min(score, 10.0)
         if analysis.get("recommendation") == "No":
             analysis["recommendation"] = "Yes"
