@@ -550,6 +550,7 @@ def save_matched_job(job: Dict, analysis: Dict) -> bool:
             "application_timeline": [],
             "notes": "",
             "application_qa": [],
+            "highlights": [],
         }
         
         matched_jobs.insert_one(matched_job_data)

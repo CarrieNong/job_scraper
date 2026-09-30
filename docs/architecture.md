@@ -275,10 +275,12 @@ Details: [`matching_criteria.md`](./matching_criteria.md).
 | Collection | Written by | Contents |
 |------------|------------|----------|
 | `jobs` | scrapers; matcher writes analysis back | Jobs that passed the language gate (including empty-description placeholders) |
-| `matched_jobs` | matcher (≥ threshold); manual_apply | High-score matches / already applied |
+| `matched_jobs` | matcher (≥ threshold); manual_apply | High-score matches / already applied. UI can store manual `highlights` tags (separate from AI `special_match`). |
 | `scraper_stats` | scrapers | Counters: `title_passed_clicked`, `german_filtered`, `ai_title_filtered`, … |
 
 Web UI (`web_app.py`) reads these for today’s funnel, match list, and unmatched reasons.
+
+AI `special_match` / `special_match_reasons` are still written by the matcher for scoring (9–10 band) but are **not** shown as badges on the Tracker. Highlight badges on the matched-jobs page come only from the user-editable `highlights` list (`PATCH /api/jobs/<id>/highlights`).
 
 ---
 

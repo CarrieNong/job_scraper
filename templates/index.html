@@ -708,7 +708,7 @@
     .job-grid.layout-compact .score-badge {
       width: 34px; height: 34px; font-size: .78rem; border-radius: 8px;
     }
-    .job-grid.layout-compact .special-match-badge {
+    .job-grid.layout-compact .highlight-badge {
       font-size: .64rem; padding: 2px 7px;
     }
     .job-grid.layout-compact .date-group-header {
@@ -743,7 +743,7 @@
     .score-mid { color: #f59e0b; border-color: #f59e0b33; background: #f59e0b10; }
     .score-lo  { color: #ef4444; border-color: #ef444433; background: #ef444410; }
 
-    .special-match-badge {
+    .highlight-badge {
       flex-shrink: 0;
       font-size: .68rem;
       font-weight: 700;
@@ -756,11 +756,11 @@
       white-space: nowrap;
       line-height: 1.3;
     }
-    .card.special-match {
+    .card.has-highlights {
       border-color: #f59e0b66;
       box-shadow: 0 0 0 1px #f59e0b22;
     }
-    .filter-special {
+    .filter-highlights {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -771,11 +771,111 @@
       cursor: pointer;
       flex-shrink: 0;
     }
-    .filter-special.active {
+    .filter-highlights.active {
       color: #1a1408;
       background: linear-gradient(135deg, #fbbf24, #f59e0b);
       border-color: #d97706;
     }
+
+    .highlights-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 4px;
+      padding: 10px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .highlights-label {
+      font-size: .72rem;
+      font-weight: 600;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .highlights-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 22px;
+    }
+    .highlights-chips:empty::before {
+      content: 'No highlights yet';
+      font-size: .75rem;
+      color: var(--muted);
+    }
+    .hl-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: .72rem;
+      font-weight: 600;
+      padding: 3px 8px 3px 10px;
+      border-radius: 999px;
+      color: #1a1408;
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      border: 1px solid #d97706;
+      line-height: 1.3;
+    }
+    .hl-chip button {
+      background: transparent;
+      border: none;
+      color: #1a1408;
+      font-size: .85rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0 2px;
+      opacity: .7;
+    }
+    .hl-chip button:hover { opacity: 1; }
+    .highlights-add-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .hl-preset {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      padding: 4px 10px;
+      font-size: .72rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color .15s, color .15s, opacity .15s;
+    }
+    .hl-preset:hover { border-color: #f59e0b; color: #f59e0b; }
+    .hl-preset.active {
+      opacity: .45;
+      cursor: default;
+      pointer-events: none;
+    }
+    .hl-input {
+      flex: 1;
+      min-width: 100px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 4px 8px;
+      font-size: .75rem;
+      outline: none;
+      font-family: inherit;
+    }
+    .hl-input:focus { border-color: #f59e0b; }
+    .hl-add-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      padding: 4px 10px;
+      font-size: .75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .hl-add-btn:hover { border-color: #f59e0b; color: #f59e0b; }
 
     /* Meta row */
     .card-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -1431,7 +1531,7 @@
     <button type="button" data-layout="cards" onclick="setLayout('cards')" title="Card layout">▦ Cards</button>
     <button type="button" data-layout="compact" onclick="setLayout('compact')" title="Compact list">☰ List</button>
   </div>
-  <button type="button" id="specialMatchFilter" class="filter-special" onclick="toggleSpecialMatchFilter()" title="Show special matches only">★ Special Match</button>
+  <button type="button" id="highlightsFilter" class="filter-highlights" onclick="toggleHighlightsFilter()" title="Show manually highlighted jobs only">★ Highlights</button>
   <span class="count-label" id="countLabel"></span>
 </div>
 
@@ -1446,11 +1546,13 @@
 <script>
 /* ── State ───────────────────────────────────────────────────────── */
 let currentStatusFilter = 'all';
-let specialMatchOnly = false;
+let highlightsOnly = false;
 let debounceTimer = null;
 let dateDebounceTimer = null;
 const collapsedGroups = new Set(); // tracks which date groups are collapsed
 let currentLayout = localStorage.getItem('jobLayout') || 'compact';
+const jobHighlights = {}; // job_id -> string[]
+const HIGHLIGHT_PRESETS = ['Leipzig', 'Chinese+'];
 
 const STATUS_LABEL = {
   pending:    'Not Applied',
@@ -1897,9 +1999,9 @@ function setStatusFilter(status) {
   loadJobs();
 }
 
-function toggleSpecialMatchFilter() {
-  specialMatchOnly = !specialMatchOnly;
-  document.getElementById('specialMatchFilter').classList.toggle('active', specialMatchOnly);
+function toggleHighlightsFilter() {
+  highlightsOnly = !highlightsOnly;
+  document.getElementById('highlightsFilter').classList.toggle('active', highlightsOnly);
   loadJobs();
 }
 
@@ -2002,13 +2104,60 @@ function renderBreakdown(title, section) {
     </details>`;
 }
 
-function specialMatchBadge(job) {
-  if (!job.special_match) return '';
-  const reasons = Array.isArray(job.special_match_reasons)
-    ? job.special_match_reasons.filter(Boolean).join(' · ')
-    : '';
-  const title = reasons ? ` title="${escHtml(reasons)}"` : '';
-  return `<span class="special-match-badge"${title}>★ Special Match</span>`;
+function normalizeHighlights(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const item of list) {
+    const tag = String(item || '').trim().slice(0, 40);
+    if (!tag) continue;
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(tag);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+function highlightBadgesHtml(highlights) {
+  if (!highlights.length) return '';
+  return highlights.map(tag =>
+    `<span class="highlight-badge" title="${escHtml(tag)}">★ ${escHtml(tag)}</span>`
+  ).join('');
+}
+
+function renderHighlightChips(highlights) {
+  return highlights.map(tag => `
+    <span class="hl-chip">
+      ★ ${escHtml(tag)}
+      <button type="button" title="Remove" data-tag="${escHtml(tag)}" onclick="removeHighlight(this)">×</button>
+    </span>
+  `).join('');
+}
+
+function renderHighlightsBlock(job) {
+  const id = job._id;
+  const highlights = normalizeHighlights(job.highlights);
+  jobHighlights[id] = highlights.slice();
+  const presets = HIGHLIGHT_PRESETS.map(tag => {
+    const active = highlights.some(h => h.toLowerCase() === tag.toLowerCase());
+    return `<button type="button" class="hl-preset${active ? ' active' : ''}"
+              data-preset="${escHtml(tag)}"
+              onclick="addHighlightPreset('${id}', '${escHtml(tag)}')">${escHtml(tag)}</button>`;
+  }).join('');
+  return `
+    <div class="highlights-wrap" data-id="${id}" id="highlights-${id}" onclick="event.stopPropagation()">
+      <div class="highlights-label">★ Highlights (manual)</div>
+      <div class="highlights-chips" data-chips>${renderHighlightChips(highlights)}</div>
+      <div class="highlights-add-row">
+        ${presets}
+        <input class="hl-input" type="text" maxlength="40" placeholder="Custom tag…"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();addHighlightFromInput('${id}');}" />
+        <button type="button" class="hl-add-btn" onclick="addHighlightFromInput('${id}')">+ Add</button>
+      </div>
+    </div>
+  `;
 }
 
 /* ── Render card ─────────────────────────────────────────────────── */
@@ -2021,10 +2170,11 @@ function renderCard(job) {
   const matchReasons = hasBreakdown
     ? ''
     : (job.match_reasons || []).slice(0, 3).map(r => `<li>${escHtml(r)}</li>`).join('');
-  const specialBadge = specialMatchBadge(job);
+  const highlights = normalizeHighlights(job.highlights);
+  const highlightBadges = highlightBadgesHtml(highlights);
 
   const card = document.createElement('div');
-  card.className = 'card' + (job.special_match ? ' special-match' : '');
+  card.className = 'card' + (highlights.length ? ' has-highlights' : '');
   card.id = `card-${job._id}`;
 
   card.innerHTML = `
@@ -2037,7 +2187,7 @@ function renderCard(job) {
       <div class="row-meta">
         ${job.location ? `<span class="row-loc" title="${escHtml(job.location)}">📍 ${escHtml(job.location)}</span>` : ''}
         <span class="meta-pill source-pill">${escHtml(job.source || '')}</span>
-        ${specialBadge}
+        <span class="row-highlights" data-row-highlights>${highlightBadges}</span>
         <span class="status-pill s-${status}" data-status-pill>${STATUS_LABEL[status] || status}</span>
         <div class="score-badge ${scoreCls(job.match_score || 0)}">${score}</div>
       </div>
@@ -2071,7 +2221,7 @@ function renderCard(job) {
       </div>
 
       <div class="card-meta">
-        ${specialBadge}
+        <span class="body-highlights" data-body-highlights>${highlightBadges}</span>
         <span class="meta-pill source-pill">${escHtml(job.source || '')}</span>
         ${job.matched_at ? `<span class="meta-pill">📅 ${job.matched_at}</span>` : ''}
         ${job.applicants ? `<span class="meta-pill">👥 ${escHtml(job.applicants)}</span>` : ''}
@@ -2088,6 +2238,8 @@ function renderCard(job) {
          href="${escHtml(job.link || '#')}" target="_blank" rel="noopener">
         ${['applied','interview','rejected','offer'].includes(status) ? '🔗 View Detail' : '🚀 Apply Now'}
       </a>
+
+      ${renderHighlightsBlock(job)}
 
       ${renderProgressBlock(job)}
 
@@ -2255,7 +2407,7 @@ async function loadJobs() {
 
   const params = new URLSearchParams();
   if (currentStatusFilter !== 'all') params.set('status', currentStatusFilter);
-  if (specialMatchOnly) params.set('special_match', 'true');
+  if (highlightsOnly) params.set('highlights', 'true');
   if (source !== 'all') params.set('source', source);
   if (search) params.set('q', search);
   if (dates.from) params.set('date_from', dates.from);
@@ -2496,6 +2648,99 @@ async function saveNotes(btn) {
     showToast('📝 Notes saved');
   } catch (err) {
     showToast('❌ Notes save failed', 'err');
+  }
+}
+
+/* ── Manual highlights ───────────────────────────────────────────── */
+function refreshHighlightsUI(id) {
+  const highlights = normalizeHighlights(jobHighlights[id] || []);
+  jobHighlights[id] = highlights;
+  const card = document.getElementById(`card-${id}`);
+  if (!card) return;
+
+  card.classList.toggle('has-highlights', highlights.length > 0);
+  const badges = highlightBadgesHtml(highlights);
+  card.querySelectorAll('[data-row-highlights], [data-body-highlights]').forEach(el => {
+    el.innerHTML = badges;
+  });
+
+  const wrap = document.getElementById(`highlights-${id}`);
+  if (!wrap) return;
+  const chips = wrap.querySelector('[data-chips]');
+  if (chips) chips.innerHTML = renderHighlightChips(highlights);
+  wrap.querySelectorAll('.hl-preset').forEach(btn => {
+    const preset = btn.dataset.preset || '';
+    const active = highlights.some(h => h.toLowerCase() === preset.toLowerCase());
+    btn.classList.toggle('active', active);
+  });
+}
+
+async function persistHighlights(id) {
+  const highlights = normalizeHighlights(jobHighlights[id] || []);
+  const res = await fetch(`/api/jobs/${id}/highlights`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ highlights }),
+  });
+  if (!res.ok) throw new Error('Request failed');
+  const data = await res.json();
+  jobHighlights[id] = normalizeHighlights(data.highlights || highlights);
+  refreshHighlightsUI(id);
+}
+
+async function addHighlightTag(id, tag) {
+  const next = String(tag || '').trim().slice(0, 40);
+  if (!next) return;
+  const current = normalizeHighlights(jobHighlights[id] || []);
+  if (current.some(h => h.toLowerCase() === next.toLowerCase())) {
+    showToast('Already highlighted', 'err');
+    return;
+  }
+  if (current.length >= 8) {
+    showToast('At most 8 highlights', 'err');
+    return;
+  }
+  jobHighlights[id] = [...current, next];
+  refreshHighlightsUI(id);
+  try {
+    await persistHighlights(id);
+    showToast(`★ ${next}`);
+  } catch (err) {
+    jobHighlights[id] = current;
+    refreshHighlightsUI(id);
+    showToast('❌ Highlight save failed', 'err');
+  }
+}
+
+function addHighlightPreset(id, tag) {
+  addHighlightTag(id, tag);
+}
+
+function addHighlightFromInput(id) {
+  const wrap = document.getElementById(`highlights-${id}`);
+  if (!wrap) return;
+  const input = wrap.querySelector('.hl-input');
+  const value = (input && input.value) || '';
+  if (input) input.value = '';
+  addHighlightTag(id, value);
+}
+
+async function removeHighlight(btn) {
+  const wrap = btn.closest('.highlights-wrap');
+  if (!wrap) return;
+  const id = wrap.dataset.id;
+  const tag = btn.dataset.tag || '';
+  const current = normalizeHighlights(jobHighlights[id] || []);
+  const next = current.filter(h => h.toLowerCase() !== String(tag).toLowerCase());
+  jobHighlights[id] = next;
+  refreshHighlightsUI(id);
+  try {
+    await persistHighlights(id);
+    showToast('Highlight removed');
+  } catch (err) {
+    jobHighlights[id] = current;
+    refreshHighlightsUI(id);
+    showToast('❌ Highlight remove failed', 'err');
   }
 }
 

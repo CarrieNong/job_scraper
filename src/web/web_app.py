@@ -214,6 +214,16 @@ def _serialize(job: dict) -> dict:
     job["link"] = _normalize_link(job)
     # Ensure notes field always exists
     job.setdefault("notes", "")
+    # Manual UI highlights (user tags); separate from AI special_match
+    raw_highlights = job.get("highlights")
+    if not isinstance(raw_highlights, list):
+        job["highlights"] = []
+    else:
+        job["highlights"] = [
+            str(item).strip()
+            for item in raw_highlights
+            if str(item).strip()
+        ]
     # Ensure application Q&A list always exists
     qa = job.get("application_qa")
     if not isinstance(qa, list):
@@ -272,9 +282,10 @@ def api_jobs():
         query["status"] = status_filter
     if source_filter and source_filter != "all":
         query["source"] = source_filter
-    special_filter = request.args.get("special_match", "").strip().lower()
-    if special_filter in ("1", "true", "yes"):
-        query["special_match"] = True
+    # Filter by manual UI highlights (not AI special_match)
+    highlights_filter = request.args.get("highlights", "").strip().lower()
+    if highlights_filter in ("1", "true", "yes"):
+        query["highlights.0"] = {"$exists": True}
     if search_query:
         query["$or"] = [
             {"title":   {"$regex": search_query, "$options": "i"}},
@@ -458,6 +469,47 @@ def api_update_notes(job_id: str):
     return jsonify({"ok": True})
 
 
+@app.route("/api/jobs/<job_id>/highlights", methods=["PATCH"])
+def api_update_highlights(job_id: str):
+    """Replace manual highlight tags for a matched job (UI only; not AI special_match)."""
+    data = request.get_json(silent=True) or {}
+    raw = data.get("highlights", [])
+    if not isinstance(raw, list):
+        return jsonify({"error": "highlights must be a list"}), 400
+
+    cleaned = []
+    seen = set()
+    for item in raw:
+        tag = str(item).strip()
+        if not tag:
+            continue
+        # Cap length so free-text tags stay readable on cards
+        tag = tag[:40]
+        key = tag.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(tag)
+        if len(cleaned) >= 8:
+            break
+
+    try:
+        oid = ObjectId(job_id)
+    except Exception:
+        return jsonify({"error": "Invalid job ID"}), 400
+
+    collection = get_collection("matched_jobs")
+    result = collection.update_one(
+        {"_id": oid},
+        {"$set": {"highlights": cleaned, "updated_at": datetime.now()}},
+    )
+
+    if result.matched_count == 0:
+        return jsonify({"error": "Job not found"}), 404
+
+    return jsonify({"ok": True, "highlights": cleaned})
+
+
 @app.route("/api/jobs/<job_id>/application-qa", methods=["PATCH"])
 def api_update_application_qa(job_id: str):
     """Update application Q&A pairs for a matched job."""
@@ -580,6 +632,7 @@ def api_update_unmatched_status(job_id: str):
                     "application_timeline": [],
                     "notes":          "",
                     "application_qa": [],
+                    "highlights":     [],
                     "created_at":     now,
                     "from_unmatched": True,
                 }
