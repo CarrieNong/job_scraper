@@ -37,6 +37,10 @@ from core.scraper_utils import (
     extract_indeed_detail_meta,
     DESCRIPTION_FETCH_RETRIES,
 )
+from core.challenge_wait import (
+    handle_indeed_challenge_if_needed,
+    is_indeed_challenge_page,
+)
 
 # Indeed configuration
 BASE_URL = INDEED_CONFIG["base_url"]
@@ -48,6 +52,56 @@ RESULTS_PER_PAGE = INDEED_CONFIG["results_per_page"]
 JOB_CARD_SELECTOR = INDEED_CONFIG["selectors"]["job_card"]
 JOB_TITLE_SELECTOR = INDEED_CONFIG["selectors"]["job_title"]
 DETAIL_SELECTOR = INDEED_CONFIG["selectors"]["detail"]
+
+# Human-like pacing (Indeed is stricter than LinkedIn about bot-like click trains)
+_PRE_CLICK_PAUSE = (1.8, 4.5)
+_POST_CLICK_PAUSE = (1.5, 3.5)
+_BETWEEN_CARDS_PAUSE = (5.0, 11.0)
+_BETWEEN_PAGES_PAUSE = (35.0, 80.0)
+_BETWEEN_KEYWORDS_PAUSE = (30.0, 70.0)
+_CLICK_HOLD_MS = (80, 220)
+
+
+def _human_card_click(card) -> None:
+    """Click a job card with a short mousedown→mouseup delay (less mechanical)."""
+    delay_ms = random.randint(*_CLICK_HOLD_MS)
+    card.click(delay=delay_ms)
+
+
+def _reload_after_challenge(page) -> None:
+    """Reload SERP and give the page a moment after the user clears a challenge."""
+    try:
+        page.reload(wait_until="domcontentloaded")
+    except Exception as exc:
+        print(f"⚠ Reload after challenge failed: {exc}")
+    pause(3.0, 6.0, "Settle after challenge / reload")
+    dismiss_overlays(page)
+
+
+def _wait_for_job_cards(page, *, context: str, timeout_ms: int = 15000) -> bool:
+    """
+    Wait for SERP job cards. On challenge pages, Telegram-wait for the user,
+    reload, and retry once. Returns True if cards are present.
+    """
+    for attempt in range(2):
+        try:
+            page.wait_for_selector(JOB_CARD_SELECTOR, timeout=timeout_ms)
+            return True
+        except PlaywrightTimeoutError:
+            pass
+
+        if not is_indeed_challenge_page(page):
+            return False
+
+        label = context if attempt == 0 else f"{context}, still blocked"
+        handle_indeed_challenge_if_needed(page, context=label)
+        _reload_after_challenge(page)
+
+    try:
+        page.wait_for_selector(JOB_CARD_SELECTOR, timeout=timeout_ms)
+        return True
+    except PlaywrightTimeoutError:
+        return False
 
 
 def extract_indeed_description(page, detail) -> str:
@@ -178,6 +232,7 @@ def scrape_jobs(page, max_jobs=INDEED_JOBS_PER_PAGE):
 
             card = cards.nth(index)
             card.scroll_into_view_if_needed()
+            pause(0.4, 1.2)
             title, job_id, href_value = extract_card_fields(card)
             print(f"Job {index + 1}: {title} | id={job_id}")
 
@@ -198,9 +253,32 @@ def scrape_jobs(page, max_jobs=INDEED_JOBS_PER_PAGE):
 
             # Title passed + new job → count as a candidate we evaluated
             increment_scraper_stat("title_passed_clicked")
-            card.click()
-            page.wait_for_selector(DETAIL_SELECTOR, timeout=15000)
-            pause(1.0, 2.0)
+            pause(*_PRE_CLICK_PAUSE, f"Job {index + 1}: think before click")
+            _human_card_click(card)
+
+            try:
+                page.wait_for_selector(DETAIL_SELECTOR, timeout=15000)
+            except PlaywrightTimeoutError:
+                if is_indeed_challenge_page(page):
+                    handle_indeed_challenge_if_needed(
+                        page, context=f"after click job {index + 1}"
+                    )
+                    pause(2.0, 4.0, "Settle after challenge")
+                    # Re-click the same card if the SERP is still open
+                    try:
+                        cards = page.locator(JOB_CARD_SELECTOR)
+                        if index < cards.count():
+                            pause(*_PRE_CLICK_PAUSE, f"Job {index + 1}: re-click after challenge")
+                            _human_card_click(cards.nth(index))
+                        page.wait_for_selector(DETAIL_SELECTOR, timeout=15000)
+                    except PlaywrightTimeoutError:
+                        print(f"Job {index + 1}: detail still missing after challenge")
+                        continue
+                else:
+                    print(f"Job {index + 1}: timed out while loading details")
+                    continue
+
+            pause(*_POST_CLICK_PAUSE)
 
             detail = page.locator(DETAIL_SELECTOR).first
             description = ""
@@ -275,12 +353,25 @@ def scrape_jobs(page, max_jobs=INDEED_JOBS_PER_PAGE):
                         jobs_data.append(job_data)
                         print(f"Job {index + 1}: saved job_id {job_id}")
 
-            if random.random() < 0.3:
-                pause(1, 3, f"Job {index + 1}: extra think time")
-            pause(4, 8, f"Job {index + 1}: wait before the next card")
+            if random.random() < 0.35:
+                pause(2, 6, f"Job {index + 1}: extra think time")
+            pause(*_BETWEEN_CARDS_PAUSE, f"Job {index + 1}: wait before the next card")
 
         except PlaywrightTimeoutError:
-            print(f"Job {index + 1}: timed out while loading details")
+            if is_indeed_challenge_page(page):
+                try:
+                    handle_indeed_challenge_if_needed(
+                        page, context=f"timeout on job {index + 1}"
+                    )
+                except RuntimeError as exc:
+                    print(f"Job {index + 1}: {exc}")
+                    break
+            else:
+                print(f"Job {index + 1}: timed out while loading details")
+        except RuntimeError as e:
+            # Challenge resume timeout — abort the page loop
+            print(f"Job {index + 1}: {e}")
+            break
         except Exception as e:
             print(f"Job {index + 1}: error {type(e).__name__}: {e}")
             continue
@@ -309,12 +400,18 @@ def scrape_keyword(page, keyword, max_pages, max_jobs_per_page=INDEED_JOBS_PER_P
         start = page_index * RESULTS_PER_PAGE
         print(f"\n--- {keyword}: page {page_index + 1}/{max_pages} (start={start}) ---")
         page.goto(jobs_search_url(keyword, start=start), wait_until="domcontentloaded")
-        pause(4, 7, f"Waiting for search results: {keyword}")
+        pause(4, 8, f"Waiting for search results: {keyword}")
         dismiss_overlays(page)
 
         try:
-            page.wait_for_selector(JOB_CARD_SELECTOR, timeout=15000)
-        except PlaywrightTimeoutError:
+            cards_ready = _wait_for_job_cards(
+                page, context=f"{keyword} page {page_index + 1}"
+            )
+        except RuntimeError as exc:
+            print(f"{keyword}: {exc}")
+            break
+
+        if not cards_ready:
             print(f"No job cards for {keyword} on page {page_index + 1}, stop paging")
             break
 
@@ -322,7 +419,7 @@ def scrape_keyword(page, keyword, max_pages, max_jobs_per_page=INDEED_JOBS_PER_P
         all_jobs.extend(jobs)
 
         if page_index < max_pages - 1:
-            pause(15, 30, "Rest between pages")
+            pause(*_BETWEEN_PAGES_PAUSE, "Rest between pages")
 
     return all_jobs
 
@@ -350,7 +447,7 @@ def main():
             jobs = scrape_keyword(page, keyword, max_pages, max_jobs_per_page=max_jobs)
             all_jobs.extend(jobs)
             if i < len(keywords) - 1:
-                pause(15, 30, "Rest between keywords")
+                pause(*_BETWEEN_KEYWORDS_PAUSE, "Rest between keywords")
 
     print(f"\nDone. Saved {len(all_jobs)} new Indeed jobs this run.")
 

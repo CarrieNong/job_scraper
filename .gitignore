@@ -8,6 +8,7 @@ stdout.log
 stderr.log
 task.log
 cron.log
+logs/indeed_human_resume.flag
 
 # Chrome user data
 /tmp/chrome_selenium

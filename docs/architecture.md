@@ -11,7 +11,7 @@ All project docs and code comments are written in English.
 ```mermaid
 flowchart TB
     subgraph Triggers["Entry points"]
-        T1["Telegram<br/>/jobs · /quick_jobs · /matches"]
+        T1["Telegram<br/>/jobs · /quick_jobs · /matches · /indeed_ok"]
         T2["Shell<br/>run_task.sh · run_quick.sh"]
         T3["LaunchD schedule<br/>~18:00 / ~11:00"]
         T4["Web UI<br/>start_ui.sh"]
@@ -91,10 +91,24 @@ caffeinate -i ./run_quick.sh
 | `/start` | Confirm bot is online |
 | `/test` | Confirm the Mac is connected and ready |
 | `/jobs` | Run `run_task.sh` in the background; push today’s match cards when done |
-| `/quick_jobs` | Run `run_quick.sh` in the background |
+| `/quick_jobs` | Run `run_quick.sh` in the background; push today’s match cards when done |
 | `/matches` | Push today’s `matched_jobs` without scraping |
+| `/indeed_ok` | Resume Indeed after human verification (also: inline **Continue** button) |
 
 Start the bot: `python3 src/bot/telegram_bot.py`
+
+### 2.2.1 Indeed human verification handshake
+
+Indeed sometimes shows a captcha / “press and hold” challenge. The scraper:
+
+1. Detects the challenge page (URL / captcha widgets / challenge copy)
+2. Sends a Telegram alert with a **Continue** button
+3. Pauses (up to 45 minutes) until you confirm
+4. Reloads the SERP and continues the same keyword / page
+
+Confirm by tapping **Continue**, sending `/indeed_ok`, or (bot offline) `touch logs/indeed_human_resume.flag`.
+
+Indeed pacing is slower and more human-like than LinkedIn: random think-time before each card click, hold-delay on click, longer rests between cards (~5–11s), pages (~35–80s), and keywords (~30–70s).
 
 ### 2.3 Standalone CLI (debug / partial runs)
 
@@ -307,13 +321,15 @@ job_scraper/
 │   ├── core/
 │   │   ├── config.py            # keywords, title blacklist, platform URLs
 │   │   ├── db_mongo.py          # Mongo helpers
-│   │   └── scraper_utils.py     # title gates, Lingua, CDP helpers
+│   │   ├── scraper_utils.py     # title gates, Lingua, CDP helpers
+│   │   ├── challenge_wait.py    # Indeed captcha detect + Telegram resume flag
+│   │   └── telegram_notify.py   # sync Bot API notify (used by scrapers)
 │   ├── scrapers/                # Indeed / LinkedIn / Quick / Manual
 │   ├── matching/
 │   │   ├── ai_matcher.py        # match orchestration
 │   │   └── german_gate.py       # mandatory-German rule gate on English JDs
 │   ├── web/web_app.py           # Tracker UI
-│   └── bot/telegram_bot.py      # Telegram commands
+│   └── bot/telegram_bot.py      # Telegram commands (+ Indeed resume)
 └── scripts/                     # cleanup / eval helpers
 ```
 

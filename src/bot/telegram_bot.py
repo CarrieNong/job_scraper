@@ -10,6 +10,7 @@ import os
 from telegram import BotCommand, Update
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
 )
@@ -23,6 +24,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from core.db_mongo import get_collection  # noqa: E402
+from core.challenge_wait import signal_indeed_resume  # noqa: E402
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ALLOWED_USER_ID = int(os.getenv("TELEGRAM_ALLOWED_USER_ID"))
@@ -306,7 +308,7 @@ async def quick_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     LinkedIn uses the 12h quick URL (no keyword loop).
 
     Flow:
-      /quick_jobs → "Started" → background: caffeinate -i ./run_quick.sh → "Done"
+      /quick_jobs → "Started" → caffeinate -i ./run_quick.sh → "Done" → today's match cards
     """
     await _start_pipeline(
         update,
@@ -317,6 +319,7 @@ async def quick_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "running in the background (~20–40 min)."
         ),
         done_text="✅ Done — light pipeline finished.",
+        push_matches=True,
     )
 
 
@@ -329,6 +332,54 @@ async def matches(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _push_todays_matched_jobs(context.bot, update.effective_chat.id)
 
 
+async def indeed_ok(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /indeed_ok — tell a paused Indeed scraper that human verification is done.
+
+    The scraper polls logs/indeed_human_resume.flag; this command writes it.
+    """
+    if not is_allowed(update):
+        return
+
+    path = signal_indeed_resume()
+    await update.message.reply_text(
+        "✅ Resume signal sent. The Indeed scraper will continue shortly.\n"
+        f"({path.name})"
+    )
+
+
+async def indeed_resume_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Inline button: Continue after Indeed human verification."""
+    query = update.callback_query
+    if query is None:
+        return
+
+    if not is_allowed(update):
+        await query.answer("Not authorized.", show_alert=True)
+        return
+
+    if query.data != "indeed_resume":
+        await query.answer()
+        return
+
+    path = signal_indeed_resume()
+    await query.answer("Resume signal sent")
+    try:
+        await query.edit_message_text(
+            "✅ Resume signal sent. The Indeed scraper will continue shortly.\n"
+            f"({path.name})"
+        )
+    except Exception:
+        # Message may already be edited or too old — still confirm in chat
+        if update.effective_chat is not None:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="✅ Resume signal sent. The Indeed scraper will continue shortly.",
+            )
+
+
 async def _post_init(app: Application) -> None:
     """Register slash commands so they appear in Telegram's menu."""
     await app.bot.set_my_commands(
@@ -338,6 +389,7 @@ async def _post_init(app: Application) -> None:
             BotCommand("jobs", "Full scrape + AI match (~40–60 min)"),
             BotCommand("quick_jobs", "Light scrape + AI match (~20–40 min)"),
             BotCommand("matches", "Push today's matched job cards"),
+            BotCommand("indeed_ok", "Resume Indeed after human verification"),
         ]
     )
 
@@ -355,9 +407,11 @@ def main():
     app.add_handler(CommandHandler("jobs", jobs))
     app.add_handler(CommandHandler("quick_jobs", quick_jobs))
     app.add_handler(CommandHandler("matches", matches))
+    app.add_handler(CommandHandler("indeed_ok", indeed_ok))
+    app.add_handler(CallbackQueryHandler(indeed_resume_callback, pattern=r"^indeed_resume$"))
 
     print(f"Telegram bot is running... (cwd={PROJECT_DIR})")
-    print("Commands: /start /test /jobs /quick_jobs /matches")
+    print("Commands: /start /test /jobs /quick_jobs /matches /indeed_ok")
 
     app.run_polling()
 
