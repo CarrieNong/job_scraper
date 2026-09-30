@@ -78,7 +78,7 @@ Location / German company / “nice to have German” must **not** fail the matc
 | Entry | Role |
 |-------|------|
 | `run_task.sh` / Telegram `/jobs` | Full: Indeed + LinkedIn (24h) parallel → AI match → unmatched desc cleanup |
-| `run_quick.sh` / Telegram `/quick_jobs` | Quick: LinkedIn 12h only → AI match |
+| `run_quick.sh` / Telegram `/quick_jobs` | Light: Indeed 24h (2 pages/keyword) + LinkedIn 12h quick URL (3 pages) in parallel → AI match |
 | `start_ui.sh` | Flask tracker UI (default port 5050) |
 | `src/bot/telegram_bot.py` | `/start` `/test` `/jobs` `/quick_jobs` `/matches` |
 | Individual `src/scrapers/*.py`, `src/matching/ai_matcher.py` | Debug / partial runs |

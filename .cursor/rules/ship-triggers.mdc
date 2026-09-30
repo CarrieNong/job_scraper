@@ -1,0 +1,43 @@
+---
+description: Trigger words for summarize, commit, and push after finishing a feature
+alwaysApply: true
+---
+
+# Ship triggers (commit / push)
+
+When the user message clearly matches a trigger below, run the matching workflow.
+Do not commit or push unless a trigger (or an explicit ask) is present.
+
+All docs, commit messages, and agent replies for this workflow use English.
+
+## Triggers
+
+| Intent | Example phrases |
+|--------|-----------------|
+| **Commit only** | `commit` `summarize and commit` |
+| **Commit + push** | `ship` `done` `push` `commit and push` |
+
+Partial / casual matches count if intent is clear (e.g. "please commit and push this").
+If the user only asks to summarize with no commit/push intent → summarize changes in chat; do not run git write commands.
+
+## Commit workflow
+
+1. In parallel: `git status`, `git diff` (staged + unstaged), `git log -8 --oneline`
+2. Stage relevant files only. Never stage `.env`, credentials, or secrets.
+3. Commit message: Conventional Commits, English, match recent style (`feat:`, `fix:`, …). 1–2 sentences; focus on why.
+4. Use a HEREDOC for the message. No `--no-verify`, no amend unless the user's git rules allow it.
+5. `git status` after commit to verify.
+
+## Push workflow
+
+Only when the trigger is **Commit + push** (or the user explicitly asks to push):
+
+1. Complete the commit workflow first (skip if there is nothing to commit and HEAD is already ahead).
+2. `git push -u origin HEAD` (or plain `git push` if upstream exists).
+3. Reply in English with branch name, commit subject, and whether push succeeded.
+
+## Safety
+
+- No force push to `main`/`master`; warn if asked.
+- No destructive git (`reset --hard`, etc.) unless explicitly requested.
+- If the working tree is clean and nothing to push, say so briefly—do not create an empty commit.

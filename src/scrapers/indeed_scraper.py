@@ -18,7 +18,7 @@ from playwright.sync_api import sync_playwright
 
 from core.db_mongo import init_db, save_job, is_job_id_exists, increment_scraper_stat
 from core.config import (
-    MAX_JOBS_PER_PAGE,
+    INDEED_JOBS_PER_PAGE,
     INDEED_CONFIG,
 )
 from core.scraper_utils import (
@@ -151,7 +151,7 @@ def extract_card_fields(card):
     return title, job_id, href
 
 
-def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
+def scrape_jobs(page, max_jobs=INDEED_JOBS_PER_PAGE):
     """
     Scrape job listings from the current Indeed search results page.
     
@@ -289,7 +289,7 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
     return jobs_data
 
 
-def scrape_keyword(page, keyword, max_pages, max_jobs_per_page=MAX_JOBS_PER_PAGE):
+def scrape_keyword(page, keyword, max_pages, max_jobs_per_page=INDEED_JOBS_PER_PAGE):
     """
     Scrape multiple pages of Indeed results for a single keyword.
     
@@ -331,9 +331,11 @@ def main():
     args = parse_args()
     keywords = args.keywords
     max_pages = args.max_pages
+    max_jobs = args.max_jobs if args.max_jobs is not None else INDEED_JOBS_PER_PAGE
     print(f"Source: {SOURCE}")
     print(f"Keywords: {keywords}")
     print(f"Max pages per keyword: {max_pages}")
+    print(f"Max jobs per page: {max_jobs}")
 
     init_db()
     all_jobs = []
@@ -345,7 +347,7 @@ def main():
         print("Use the debug Chrome window. Dismiss Indeed cookie banners if prompted.")
 
         for i, keyword in enumerate(keywords):
-            jobs = scrape_keyword(page, keyword, max_pages)
+            jobs = scrape_keyword(page, keyword, max_pages, max_jobs_per_page=max_jobs)
             all_jobs.extend(jobs)
             if i < len(keywords) - 1:
                 pause(15, 30, "Rest between keywords")

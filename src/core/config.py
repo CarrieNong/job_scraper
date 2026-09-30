@@ -15,9 +15,24 @@ DEFAULT_KEYWORDS = [
     "software engineer",
 ]
 
-# Scraping parameters
-DEFAULT_MAX_PAGES = 2  # Maximum pages to scrape per keyword
-MAX_JOBS_PER_PAGE = 30  # Maximum jobs to process per page
+# ===== Scrape budgets =====
+# Full run (run_task.sh / Telegram /jobs): last 24 hours.
+# Both platforms walk every DEFAULT_KEYWORDS entry.
+FULL_MAX_PAGES = 3
+INDEED_JOBS_PER_PAGE = 15  # Indeed SERP page size; also the start= step
+LINKEDIN_JOBS_PER_PAGE = 30
+
+# Light run (run_quick.sh / Telegram /quick_jobs).
+# Indeed's date filter cannot go below 1 day, so the light pass reuses the
+# same 24h search and only walks fewer pages per keyword.
+# LinkedIn does not loop keywords — it uses LINKEDIN_QUICK_CONFIG (one 12h URL).
+LIGHT_INDEED_MAX_PAGES = 2
+LIGHT_LINKEDIN_MAX_PAGES = 3
+
+# Defaults for a manual full-shaped CLI run (no -p / -j).
+DEFAULT_MAX_PAGES = FULL_MAX_PAGES
+# Alias used by LinkedIn card processing. Indeed uses INDEED_JOBS_PER_PAGE.
+MAX_JOBS_PER_PAGE = LINKEDIN_JOBS_PER_PAGE
 
 # Chrome debugging configuration
 CDP_HOST = "127.0.0.1"
@@ -102,8 +117,8 @@ TITLE_EXCLUDE_KEYWORDS = [
 INDEED_CONFIG = {
     "source": "indeed",
     "base_url": "https://de.indeed.com/jobs",
-    "fromage": "1",  # Posted within: last 1 day
-    "results_per_page": 10,  # Indeed SERP: 10 results per page
+    "fromage": "1",  # Posted within: last 1 day (Indeed minimum)
+    "results_per_page": INDEED_JOBS_PER_PAGE,
     
     # Selectors
     "selectors": {
@@ -129,9 +144,9 @@ LINKEDIN_CONFIG = {
 }
 
 
-# ===== LinkedIn Quick Search Configuration (12-hour window) =====
-# Used by the morning quick-scrape run (11 AM) to capture jobs posted
-# in the last 12 hours — complements the full 24-hour evening scrape.
+# ===== LinkedIn light-run search (12-hour window) =====
+# Used by the morning light run. One OR query instead of the keyword loop,
+# because the 12h filter lives on this URL (f_TPR=r43200).
 LINKEDIN_QUICK_CONFIG = {
     "source": "linkedin",
     # Direct search URL — keywords encode an OR query across all target roles.
@@ -148,9 +163,9 @@ LINKEDIN_QUICK_CONFIG = {
     ),
     "time_window_hours": 12,
 
-    # Selectors (same as standard LinkedIn)
+    # SDUI search-results cards. componentkey is job-card-component-ref-<job id>.
     "selectors": {
-        "job_card": ".scaffold-layout__list-item",
-        "job_link": "a.job-card-container__link",
+        "job_card": '[componentkey^="job-card-component-ref-"][role="button"]',
+        "next_page": '[data-testid="pagination-controls-next-button-visible"]',
     }
 }

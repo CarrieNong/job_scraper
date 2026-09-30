@@ -7,10 +7,10 @@ Automatically scrapes job listings from Indeed and LinkedIn, uses AI to score ea
 | Pipeline | Script | When to run | What it does |
 |---|---|---|---|
 | **Full scrape** | `run_task.sh` | ~6 PM daily | Indeed + LinkedIn (last 24 h), all keywords, AI matching |
-| **Quick scrape** | `run_quick.sh` | ~11 AM daily | LinkedIn only (last 12 h), pre-built OR query, AI matching |
+| **Light scrape** | `run_quick.sh` | ~11 AM daily | Indeed (24 h, 2 pages/keyword) + LinkedIn quick URL (12 h, 3 pages), then AI matching |
 
 Run the full scrape every evening so the database is refreshed.  
-Run the quick scrape every morning before your application session to capture the freshest listings.
+Run the light scrape every morning before your application session to capture the freshest listings.
 
 ## Features
 
@@ -49,7 +49,7 @@ job_scraper/
 ├── templates/                         # Web UI templates
 ├── logs/                              # Log output directory
 ├── run_task.sh                        # Full pipeline (6 PM — Indeed + LinkedIn 24 h)
-├── run_quick.sh                       # Quick pipeline (11 AM — LinkedIn 12 h only)
+├── run_quick.sh                       # Light pipeline (11 AM — Indeed 2 pages + LinkedIn 12 h)
 ├── start_ui.sh                        # Start Job Tracker web UI
 ├── com.user.job_scraper.plist         # LaunchD config (daily schedule)
 └── .env                               # Environment variables (not in git)
@@ -224,9 +224,9 @@ Execution order:
 5. Desktop notification — shows counts
 6. Chrome closed
 
-Estimated time: **40–60 minutes** with default settings (7 keywords × 3 pages).
+Estimated time: **40–60 minutes**. Full run: 3 pages per keyword, Indeed ~15 cards/page, LinkedIn 30.
 
-### Quick pipeline (~11 AM — 12-hour window)
+### Light pipeline (~11 AM)
 
 ```bash
 caffeinate -i ./run_quick.sh
@@ -234,13 +234,15 @@ caffeinate -i ./run_quick.sh
 
 Execution order:
 
-1. Launch Chrome (remote debug mode)
-2. LinkedIn quick scraper — fetches jobs posted in the **last 12 hours** using a single pre-built OR search URL (Full Stack Engineer / Frontend Developer / Product Engineer / Generative AI Engineer)
+1. Launch or reuse Chrome (remote debug mode)
+2. In parallel:
+   - Indeed — same last-24-hours search as the full run (Indeed cannot filter shorter than 1 day), **2 pages per keyword**, ~15 cards/page
+   - LinkedIn quick — jobs posted in the **last 12 hours**, one pre-built OR search URL (Full Stack Engineer / Frontend Developer / Product Engineer / Generative AI Engineer), **3 pages × 30 cards**
 3. AI matcher — analyzes all unprocessed jobs
 4. Desktop notification — shows counts
-5. Chrome closed
+5. Chrome closed only if this run started it
 
-Estimated time: **10–20 minutes** (3 pages, up to 30 jobs/page).
+Estimated time: **20–40 minutes**.
 
 ### Recommended daily schedule
 
@@ -270,9 +272,14 @@ DEFAULT_KEYWORDS = [
 ### Scraping limits
 
 ```python
-DEFAULT_MAX_PAGES = 3     # Pages per keyword (reduce to speed up)
-MAX_JOBS_PER_PAGE = 30    # Jobs processed per page
+FULL_MAX_PAGES = 3              # Full run: pages per keyword (both platforms)
+INDEED_JOBS_PER_PAGE = 15       # Indeed cards per page (also the start= step)
+LINKEDIN_JOBS_PER_PAGE = 30     # LinkedIn cards per page
+LIGHT_INDEED_MAX_PAGES = 2      # Light run: Indeed pages per keyword
+LIGHT_LINKEDIN_MAX_PAGES = 3    # Light run: LinkedIn quick URL pages
 ```
+
+`run_task.sh` and `run_quick.sh` read these values at start.
 
 ### Match threshold — `.env`
 
@@ -291,14 +298,14 @@ Raise it (e.g. `8.0`) for fewer, higher-quality results. Lower it (e.g. `6.0`) t
 | Option | Short | Default | Applies to |
 |--------|-------|---------|-----------|
 | `--keywords` | `-k` | `DEFAULT_KEYWORDS` | `indeed_scraper`, `linkedin_scraper` |
-| `--max-pages` | `-p` | `3` | all scrapers |
-| `--max-jobs` | `-j` | `30` | `linkedin_quick_scraper` |
+| `--max-pages` | `-p` | full `3` / LinkedIn quick `3` | all scrapers |
+| `--max-jobs` | `-j` | Indeed `15`, LinkedIn `30` | all scrapers |
 
 ```bash
 python3 src/scrapers/indeed_scraper.py -k "react developer" -p 2
 python3 src/scrapers/linkedin_scraper.py -k "frontend" "full stack" -p 3
 
-# Quick scraper — no keywords; uses the pre-built 12-hour URL
+# LinkedIn light URL — no keywords; pre-built 12-hour search
 python3 src/scrapers/linkedin_quick_scraper.py              # 3 pages, 30 jobs/page
 python3 src/scrapers/linkedin_quick_scraper.py -p 2         # 2 pages
 python3 src/scrapers/linkedin_quick_scraper.py -p 3 -j 20   # 3 pages, 20 jobs each

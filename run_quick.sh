@@ -1,10 +1,12 @@
 #!/bin/bash
-# run_quick.sh — Morning quick-scrape pipeline (run at ~11 AM)
+# run_quick.sh — Morning light-scrape pipeline (run at ~11 AM)
 #
-# Fetches LinkedIn jobs posted in the last 12 hours, then runs AI matching
-# so you have fresh, scored results ready before your daily application session.
+# Indeed and LinkedIn run in parallel, then AI matching.
+#   Indeed:   same 24h search as the full run (site minimum is 1 day),
+#             fewer pages per keyword (LIGHT_INDEED_MAX_PAGES).
+#   LinkedIn: the 12h quick URL (no keyword loop), LIGHT_LINKEDIN_MAX_PAGES.
 #
-# Complements the full 24-hour scrape (run_task.sh) that runs at ~6 PM.
+# Complements the full 24-hour scrape (run_task.sh).
 #
 # Usage:
 #   caffeinate -i ./run_quick.sh          # recommended (keeps Mac awake)
@@ -25,31 +27,73 @@ log() {
 
 trap 'log "ERROR: Script failed at line $LINENO"' ERR
 
-log "=== Quick Scrape Pipeline Started (12-hour window) ==="
+log "=== Light Scrape Pipeline Started ==="
 
 # ---------------------------------------------------------------------------
-# Step 1: Launch Chrome in remote-debug mode
+# Step 1: Launch Chrome in remote-debug mode.
+# Reuse an existing debug Chrome so a second run does not kill the first
+# profile and close the tabs the scrapers are using.
 # ---------------------------------------------------------------------------
-log "Starting Chrome with remote debugging..."
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
-  --remote-debugging-port=9222 \
-  --user-data-dir="/tmp/chrome_selenium" \
-  > /dev/null 2>&1 &
+CHROME_PID=""
+if lsof -nP -iTCP:9222 -sTCP:LISTEN >/dev/null 2>&1; then
+    log "Chrome remote debugging already listening on 9222, reusing it"
+else
+    log "Starting Chrome with remote debugging..."
+    /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+      --remote-debugging-port=9222 \
+      --user-data-dir="/tmp/chrome_selenium" \
+      --no-first-run \
+      --no-default-browser-check \
+      > "$LOG_DIR/chrome.log" 2>&1 &
+    CHROME_PID=$!
+    log "Chrome started (PID: $CHROME_PID)"
+fi
 
-CHROME_PID=$!
-log "Chrome started (PID: $CHROME_PID)"
-sleep 5
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    if lsof -nP -iTCP:9222 -sTCP:LISTEN >/dev/null 2>&1; then
+        log "Chrome remote debugging is ready"
+        break
+    fi
+    sleep 0.5
+done
+
+if ! lsof -nP -iTCP:9222 -sTCP:LISTEN >/dev/null 2>&1; then
+    log "⚠️  WARNING: Chrome debugging port 9222 is not open. See $LOG_DIR/chrome.log"
+fi
 
 cd "$PROJECT_DIR" || exit 1
 
 # ---------------------------------------------------------------------------
-# Step 2: LinkedIn quick scraper (3 pages × 30 jobs, last 12 hours)
+# Step 2: Indeed (24h, fewer pages) + LinkedIn quick URL, in parallel.
+# Budgets live in src/core/config.py.
 # ---------------------------------------------------------------------------
-log "Step 1/2: Running LinkedIn quick scraper (12-hour window)..."
+INDEED_PAGES="$($PYTHON -c "import sys; sys.path.insert(0, 'src'); from core.config import LIGHT_INDEED_MAX_PAGES; print(LIGHT_INDEED_MAX_PAGES)")"
+INDEED_JOBS="$($PYTHON -c "import sys; sys.path.insert(0, 'src'); from core.config import INDEED_JOBS_PER_PAGE; print(INDEED_JOBS_PER_PAGE)")"
+LINKEDIN_PAGES="$($PYTHON -c "import sys; sys.path.insert(0, 'src'); from core.config import LIGHT_LINKEDIN_MAX_PAGES; print(LIGHT_LINKEDIN_MAX_PAGES)")"
+LINKEDIN_JOBS="$($PYTHON -c "import sys; sys.path.insert(0, 'src'); from core.config import LINKEDIN_JOBS_PER_PAGE; print(LINKEDIN_JOBS_PER_PAGE)")"
+
+log "Step 1/2: Light scrape — Indeed ${INDEED_PAGES} pages/keyword × ${INDEED_JOBS}, LinkedIn quick ${LINKEDIN_PAGES} pages × ${LINKEDIN_JOBS}"
+$PYTHON src/scrapers/indeed_scraper.py \
+  --max-pages "$INDEED_PAGES" \
+  --max-jobs "$INDEED_JOBS" \
+  > "$LOG_DIR/indeed_light_$(date +%Y%m%d).log" 2>&1 &
+INDEED_PID=$!
 $PYTHON src/scrapers/linkedin_quick_scraper.py \
-  --max-pages 3 \
-  > "$LOG_DIR/linkedin_quick_$(date +%Y%m%d).log" 2>&1
-QUICK_EXIT=$?
+  --max-pages "$LINKEDIN_PAGES" \
+  --max-jobs "$LINKEDIN_JOBS" \
+  > "$LOG_DIR/linkedin_quick_$(date +%Y%m%d).log" 2>&1 &
+QUICK_PID=$!
+
+log "  Indeed (PID: $INDEED_PID)  and  LinkedIn quick (PID: $QUICK_PID)  running..."
+
+wait $INDEED_PID; INDEED_EXIT=$?
+wait $QUICK_PID; QUICK_EXIT=$?
+
+if [ $INDEED_EXIT -eq 0 ]; then
+    log "✅ Indeed light scraper completed successfully"
+else
+    log "⚠️  WARNING: Indeed light scraper failed (exit code: $INDEED_EXIT)"
+fi
 
 if [ $QUICK_EXIT -eq 0 ]; then
     log "✅ LinkedIn quick scraper completed successfully"
@@ -71,16 +115,17 @@ else
     log "⚠️  WARNING: AI matcher failed (exit code: $MATCHER_EXIT)"
 fi
 
-# ---------------------------------------------------------------------------
-# Close Chrome
-# ---------------------------------------------------------------------------
-log "Closing Chrome..."
-kill $CHROME_PID 2>/dev/null || true
+# Close only the Chrome this run started. A reused debug window is left open.
+if [ -n "$CHROME_PID" ]; then
+    log "Closing Chrome..."
+    kill $CHROME_PID 2>/dev/null || true
+fi
 
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
-log "=== Quick Scrape Pipeline Completed ==="
+log "=== Light Scrape Pipeline Completed ==="
+log "Indeed:         $([ $INDEED_EXIT -eq 0 ] && echo '✅' || echo '❌')"
 log "LinkedIn Quick: $([ $QUICK_EXIT  -eq 0 ] && echo '✅' || echo '❌')"
 log "AI Matcher:     $([ $MATCHER_EXIT -eq 0 ] && echo '✅' || echo '❌')"
 
@@ -107,6 +152,6 @@ MATCHED=$(echo "$STATS" | awk '{print $2}')
 log "Last 12 h: ${SCRAPED} jobs scraped, ${MATCHED} high-quality matches"
 
 # macOS desktop notification
-osascript -e "display notification \"${SCRAPED} new jobs scraped (12 h), ${MATCHED} matched\" with title \"Quick Scrape Done\" sound name \"Glass\"" 2>/dev/null || true
+osascript -e "display notification \"${SCRAPED} new jobs scraped, ${MATCHED} matched\" with title \"Light Scrape Done\" sound name \"Glass\"" 2>/dev/null || true
 
 exit 0

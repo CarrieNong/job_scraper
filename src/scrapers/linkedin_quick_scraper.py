@@ -9,7 +9,7 @@ always apply to the freshest listings.
 
 Typical usage
 -------------
-  python3 src/scrapers/linkedin_quick_scraper.py              # 3 pages, up to 30 jobs/page
+  python3 src/scrapers/linkedin_quick_scraper.py              # light default: 3 pages × 30
   python3 src/scrapers/linkedin_quick_scraper.py -p 2         # limit to 2 pages
   python3 src/scrapers/linkedin_quick_scraper.py -p 3 -j 20   # 3 pages, 20 jobs each
 """
@@ -28,7 +28,11 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 from core.db_mongo import init_db, save_job, is_job_id_exists, increment_scraper_stat
-from core.config import MAX_JOBS_PER_PAGE, DEFAULT_MAX_PAGES, LINKEDIN_QUICK_CONFIG
+from core.config import (
+    LIGHT_LINKEDIN_MAX_PAGES,
+    LINKEDIN_JOBS_PER_PAGE,
+    LINKEDIN_QUICK_CONFIG,
+)
 from core.scraper_utils import (
     pause,
     connect_browser,
@@ -63,14 +67,14 @@ def parse_quick_args():
     parser.add_argument(
         "-p", "--max-pages",
         type=int,
-        default=DEFAULT_MAX_PAGES,
-        help=f"Maximum pages to scrape (default: {DEFAULT_MAX_PAGES})",
+        default=LIGHT_LINKEDIN_MAX_PAGES,
+        help=f"Maximum pages to scrape (default: {LIGHT_LINKEDIN_MAX_PAGES})",
     )
     parser.add_argument(
         "-j", "--max-jobs",
         type=int,
-        default=MAX_JOBS_PER_PAGE,
-        help=f"Maximum jobs to process per page (default: {MAX_JOBS_PER_PAGE})",
+        default=LINKEDIN_JOBS_PER_PAGE,
+        help=f"Maximum jobs to process per page (default: {LINKEDIN_JOBS_PER_PAGE})",
     )
     return parser.parse_args()
 

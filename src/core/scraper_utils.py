@@ -503,6 +503,13 @@ def parse_args():
         default=DEFAULT_MAX_PAGES,
         help="How many result pages to scrape per keyword.",
     )
+    parser.add_argument(
+        "--max-jobs",
+        "-j",
+        type=int,
+        default=None,
+        help="Max job cards to process per page. Platform default if omitted.",
+    )
     return parser.parse_args()
 
 

@@ -300,7 +300,10 @@ async def jobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def quick_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    /quick_jobs — morning quick scrape + AI match (LinkedIn, ~12h window).
+    /quick_jobs — morning light scrape + AI match.
+
+    Indeed reuses the 24h search with fewer pages per keyword.
+    LinkedIn uses the 12h quick URL (no keyword loop).
 
     Flow:
       /quick_jobs → "Started" → background: caffeinate -i ./run_quick.sh → "Done"
@@ -310,10 +313,10 @@ async def quick_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context,
         script="./run_quick.sh",
         started_text=(
-            "⚡ Started — LinkedIn quick scrape / AI match running in the background "
-            "(~10–20 min)."
+            "⚡ Started — light scrape (Indeed + LinkedIn quick) / AI match "
+            "running in the background (~20–40 min)."
         ),
-        done_text="✅ Done — quick pipeline finished.",
+        done_text="✅ Done — light pipeline finished.",
     )
 
 
@@ -333,7 +336,7 @@ async def _post_init(app: Application) -> None:
             BotCommand("start", "Check bot is online"),
             BotCommand("test", "Check Mac is ready"),
             BotCommand("jobs", "Full scrape + AI match (~40–60 min)"),
-            BotCommand("quick_jobs", "Quick LinkedIn scrape + AI match (~10–20 min)"),
+            BotCommand("quick_jobs", "Light scrape + AI match (~20–40 min)"),
             BotCommand("matches", "Push today's matched job cards"),
         ]
     )

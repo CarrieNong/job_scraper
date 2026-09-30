@@ -22,7 +22,7 @@ flowchart TB
         Chrome["Chrome CDP :9222"]
         Indeed["indeed_scraper.py<br/>last 24h"]
         LI["linkedin_scraper.py<br/>last 24h × keywords"]
-        LIQ["linkedin_quick_scraper.py<br/>last 12h · fixed OR URL"]
+        LIQ["linkedin_quick_scraper.py<br/>light run · 12h OR URL"]
         Manual["manual_apply_scraper.py<br/>already-applied URLs"]
     end
 
@@ -73,8 +73,8 @@ flowchart TB
 
 | Command | When | What it does | Typical time |
 |---------|------|--------------|--------------|
-| `./run_task.sh` | ~18:00 (or Telegram `/jobs`) | Indeed + LinkedIn in parallel (24h) → AI match → cleanup old unmatched descriptions | 40–60 min |
-| `./run_quick.sh` | ~11:00 (or Telegram `/quick_jobs`) | LinkedIn Quick only (12h) → AI match | 10–20 min |
+| `./run_task.sh` | ~18:00 (or Telegram `/jobs`) | Full: Indeed + LinkedIn in parallel (24h, 3 pages/keyword) → AI match → cleanup old unmatched descriptions | 40–60 min |
+| `./run_quick.sh` | ~11:00 (or Telegram `/quick_jobs`) | Light: Indeed (24h, 2 pages/keyword) + LinkedIn quick URL (12h, 3 pages) in parallel → AI match | 20–40 min |
 | `./start_ui.sh` | Anytime | Start Job Tracker Web UI (default `:5050`) | — |
 
 Prefer `caffeinate -i` for manual runs so sleep does not interrupt Playwright:
@@ -100,9 +100,9 @@ Start the bot: `python3 src/bot/telegram_bot.py`
 
 | Command | Purpose |
 |---------|---------|
-| `python3 src/scrapers/indeed_scraper.py [-k …] [-p N]` | Indeed only |
-| `python3 src/scrapers/linkedin_scraper.py [-k …] [-p N]` | Full LinkedIn (keyword loop) |
-| `python3 src/scrapers/linkedin_quick_scraper.py [-p N] [-j N]` | LinkedIn 12h Quick |
+| `python3 src/scrapers/indeed_scraper.py [-k …] [-p N] [-j N]` | Indeed only (default 3 pages × 15) |
+| `python3 src/scrapers/linkedin_scraper.py [-k …] [-p N] [-j N]` | Full LinkedIn keyword loop (default 3 pages × 30) |
+| `python3 src/scrapers/linkedin_quick_scraper.py [-p N] [-j N]` | LinkedIn 12h quick URL (default 3 pages × 30) |
 | `python3 src/matching/ai_matcher.py [-l N] [-s source] [-t 7.0]` | AI match only (jobs without `matched_at`) |
 | `python3 src/scrapers/manual_apply_scraper.py <urls…>` | Already-applied jobs → scrape + score → `matched_jobs` with `status=applied` |
 | `python3 scripts/cleanup_unmatched_descriptions.py …` | Clear old unmatched JD text (also run at end of full pipeline) |
@@ -111,7 +111,7 @@ Start the bot: `python3 src/bot/telegram_bot.py`
 
 ---
 
-## 3. Full vs Quick pipelines
+## 3. Full vs Light pipelines
 
 ### 3.1 Full — `run_task.sh` / `/jobs`
 
@@ -127,10 +127,10 @@ sequenceDiagram
 
     S->>C: Start or reuse debug Chrome
     par Parallel scrape
-        S->>I: indeed_scraper.py -p 3
+        S->>I: indeed_scraper.py -p 3 -j 15
         I->>DB: save_job after filters
     and
-        S->>L: linkedin_scraper.py -p 3
+        S->>L: linkedin_scraper.py -p 3 -j 30
         L->>DB: save_job after filters
     end
     S->>AI: ai_matcher.py --threshold 7.0
@@ -142,36 +142,46 @@ sequenceDiagram
 Order:
 
 1. Chrome remote debugging (reuse if `:9222` already open)
-2. **Indeed + LinkedIn in parallel** (up to 3 pages × keywords)
+2. **Indeed + LinkedIn in parallel** — 3 pages per keyword. Indeed processes about 15 cards per page (`start` steps by 15). LinkedIn processes up to 30 cards per page.
 3. After both finish → **AI matcher**
 4. Clear descriptions on unmatched jobs older than 14 days
 5. Notify + optionally close Chrome
 
-### 3.2 Quick — `run_quick.sh` / `/quick_jobs`
+### 3.2 Light — `run_quick.sh` / `/quick_jobs`
 
 ```mermaid
 sequenceDiagram
     participant S as run_quick.sh
     participant C as Chrome :9222
+    participant I as Indeed scraper
     participant Q as LinkedIn Quick
     participant DB as MongoDB
     participant AI as ai_matcher
 
-    S->>C: Start debug Chrome
-    S->>Q: linkedin_quick_scraper.py -p 3
-    Note over Q: Fixed 12h OR search URL<br/>reuses scrape_jobs() filters
-    Q->>DB: save_job after filters
+    S->>C: Start or reuse debug Chrome
+    par Parallel scrape
+        S->>I: indeed_scraper.py -p 2 -j 15
+        Note over I: Same 24h search as Full<br/>Indeed date filter minimum is 1 day
+        I->>DB: save_job after filters
+    and
+        S->>Q: linkedin_quick_scraper.py -p 3 -j 30
+        Note over Q: Fixed 12h OR search URL<br/>reuses scrape_jobs() filters
+        Q->>DB: save_job after filters
+    end
     S->>AI: ai_matcher.py --threshold 7.0
     AI->>DB: mark / matched_jobs
-    S->>S: Notify + close Chrome
+    S->>S: Notify + close Chrome (only if this run started it)
 ```
 
 Differences from Full:
 
-- **LinkedIn only** (no Indeed)
-- No keyword loop — one pre-built OR search URL (Full Stack / Frontend / Product / GenAI, `f_TPR=r43200` = 12h)
+- **Both platforms**, still in parallel
+- Indeed stays on the 24h search (`fromage=1`; the site cannot filter shorter) and walks **2 pages per keyword** instead of 3
+- LinkedIn does **not** loop keywords — one pre-built OR search URL (Full Stack / Frontend / Product / GenAI, `f_TPR=r43200` = 12h), **3 pages × 30 cards**
 - **No** description cleanup step
-- Card processing reuses `linkedin_scraper.scrape_jobs()` (same title + language filters)
+- LinkedIn card processing reuses `linkedin_scraper.scrape_jobs()` (same title + language filters). The quick URL is the SDUI `/jobs/search-results/` page: cards are `[componentkey^="job-card-component-ref-"]`, and the next page control is `pagination-controls-next-button-visible`
+
+Budgets are defined in `src/core/config.py` (`FULL_*`, `LIGHT_*`, `INDEED_JOBS_PER_PAGE`, `LINKEDIN_JOBS_PER_PAGE`). Both shell scripts read those values at start.
 
 ---
 
@@ -313,4 +323,4 @@ job_scraper/
 
 > **Title gates (blacklist → keywords → AI title) → open detail → discard non-English JD → save English JD → matcher skips empty desc → mandatory-German rule gate → AI scores by criteria → ≥ 7 enters Tracker.**
 
-The two daily commands only change *where/how long* to scrape: evening Full 24h (Indeed + LinkedIn), morning Quick 12h (LinkedIn only). **Filter and match rules are the same.**
+The two daily commands only change *how much* to scrape. Evening Full is 24h on both platforms, 3 pages per keyword (Indeed ~15 cards/page, LinkedIn 30). Morning Light runs both in parallel: Indeed the same 24h search for 2 pages per keyword, LinkedIn the 12h quick URL for 3 pages. **Filter and match rules are the same.**

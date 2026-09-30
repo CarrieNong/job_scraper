@@ -55,11 +55,22 @@ fi
 
 cd "$PROJECT_DIR" || exit 1
 
-# Step 2 & 3: Indeed + LinkedIn scrapers (run in parallel)
-log "Step 1/3: Running Indeed and LinkedIn scrapers in parallel..."
-$PYTHON src/scrapers/indeed_scraper.py --max-pages 3 > "$LOG_DIR/indeed_$(date +%Y%m%d).log" 2>&1 &
+# Step 2 & 3: Indeed + LinkedIn scrapers (run in parallel).
+# Page and card budgets live in src/core/config.py.
+FULL_PAGES="$($PYTHON -c "import sys; sys.path.insert(0, 'src'); from core.config import FULL_MAX_PAGES; print(FULL_MAX_PAGES)")"
+INDEED_JOBS="$($PYTHON -c "import sys; sys.path.insert(0, 'src'); from core.config import INDEED_JOBS_PER_PAGE; print(INDEED_JOBS_PER_PAGE)")"
+LINKEDIN_JOBS="$($PYTHON -c "import sys; sys.path.insert(0, 'src'); from core.config import LINKEDIN_JOBS_PER_PAGE; print(LINKEDIN_JOBS_PER_PAGE)")"
+
+log "Step 1/3: Full scrape — ${FULL_PAGES} pages/keyword, Indeed ${INDEED_JOBS}/page, LinkedIn ${LINKEDIN_JOBS}/page"
+$PYTHON src/scrapers/indeed_scraper.py \
+  --max-pages "$FULL_PAGES" \
+  --max-jobs "$INDEED_JOBS" \
+  > "$LOG_DIR/indeed_$(date +%Y%m%d).log" 2>&1 &
 INDEED_PID=$!
-$PYTHON src/scrapers/linkedin_scraper.py --max-pages 3 > "$LOG_DIR/linkedin_$(date +%Y%m%d).log" 2>&1 &
+$PYTHON src/scrapers/linkedin_scraper.py \
+  --max-pages "$FULL_PAGES" \
+  --max-jobs "$LINKEDIN_JOBS" \
+  > "$LOG_DIR/linkedin_$(date +%Y%m%d).log" 2>&1 &
 LINKEDIN_PID=$!
 
 log "  Indeed  (PID: $INDEED_PID)  and  LinkedIn (PID: $LINKEDIN_PID)  running..."
