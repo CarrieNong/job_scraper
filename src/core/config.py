@@ -80,13 +80,14 @@ TITLE_EXCLUDE_KEYWORDS = [
     r"\bApplied\s+AI\s+Engineer\b",
     r"\bMachine\s+Learning\b",
     r"\bPHP\b",
+    r"\bPython\b",
     r"\bRobot\s+Learning\s+Engineer\b",
     r"\bCAD\s+Engineer\b",
     r"\bElectronic\s+Design\b",
     r"\bResearcher\b",
     r"\bTechnical\s+Customer\s+Support\b",
     r"\bHead\s+of\b",
-    r"\bSecurity\s+Engineer\b",
+    r"\bSecurity(?:\s+\w+){0,4}\s+Engineer\b",  # Security Engineer / Security Software Engineer / …
     r"\bRobotic\b",        # Robotic / Robotics
     r"\bRobotics\b",
     r"\bSystems?\s+Engineer\b",  # System / Systems Engineer
@@ -113,6 +114,7 @@ TITLE_EXCLUDE_KEYWORDS = [
     r"\bNDE\s+Engineer\b",
     r"\bMechanical\s+Engineer\b",
     r"\bWorking\s+Student\b",
+    r"\bFounding(?:\s+\w+){0,4}\s+Engineer\b",  # Founding Engineer / Founding AI Engineer / …
 ]
 
 
