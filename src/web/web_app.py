@@ -745,7 +745,9 @@ def api_stats_locations():
     """
     Location mix for applied-like jobs (applied / rejected / interview / offer).
 
-    Cities are normalized; country-only / no-city labels count as Remote.
+    Cities are normalized (street/postal lines fold into the city; "X near City"
+    keeps X). Country-only / pure-remote labels count as Remote; a concrete city
+    still wins over a (Remote) work-mode tag.
     """
     return jsonify(get_applied_location_stats())
 
