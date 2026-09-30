@@ -2,6 +2,7 @@
 from pymongo import MongoClient, errors
 from datetime import datetime
 import os
+import re
 from dotenv import load_dotenv
 
 from core.scraper_utils import indeed_job_id_variants
@@ -286,6 +287,185 @@ def get_scraper_stats() -> dict:
 
 # Statuses that mean the user has submitted an application
 APPLIED_STATUSES = ("applied", "rejected", "interview", "offer")
+
+# Parenthetical work-mode tags Often appended by LinkedIn / Indeed
+_LOC_MODE_RE = re.compile(
+    r"\s*[\(\[]\s*(remote|hybrid|on[\s-]?site|hybrides?\s+arbeiten)\s*[\)\]]\s*$",
+    re.IGNORECASE,
+)
+
+# Country / region only (no city) → count as Remote
+_COUNTRY_ONLY = {
+    "germany",
+    "deutschland",
+    "de",
+    "eu",
+    "europe",
+    "european union",
+    "european union (remote)",
+    "dach",
+    "emea",
+}
+
+# Known city aliases → canonical display name (lowercase keys)
+_CITY_CANON = {
+    "berlin": "Berlin",
+    "berlin-kreuzberg": "Berlin",
+    "kreuzberg": "Berlin",
+    "munich": "Munich",
+    "muenchen": "Munich",
+    "münchen": "Munich",
+    "hamburg": "Hamburg",
+    "leipzig": "Leipzig",
+    "cologne": "Cologne",
+    "köln": "Cologne",
+    "koeln": "Cologne",
+    "frankfurt": "Frankfurt",
+    "frankfurt am main": "Frankfurt",
+    "stuttgart": "Stuttgart",
+    "dresden": "Dresden",
+    "nuremberg": "Nuremberg",
+    "nürnberg": "Nuremberg",
+    "nuernberg": "Nuremberg",
+    "hannover": "Hannover",
+    "hanover": "Hannover",
+    "dortmund": "Dortmund",
+    "augsburg": "Augsburg",
+    "freiburg": "Freiburg",
+    "ravensburg": "Ravensburg",
+    "kronberg": "Kronberg",
+    "böblingen": "Böblingen",
+    "boeblingen": "Böblingen",
+    "neu-ulm": "Neu-Ulm",
+    "ulm": "Ulm",
+    "mannheim": "Mannheim",
+    "karlsruhe": "Karlsruhe",
+    "heidelberg": "Heidelberg",
+    "bonn": "Bonn",
+    "düsseldorf": "Düsseldorf",
+    "duesseldorf": "Düsseldorf",
+    "dusseldorf": "Düsseldorf",
+    "essen": "Essen",
+    "bremen": "Bremen",
+    "potsdam": "Potsdam",
+    "wiesbaden": "Wiesbaden",
+    "mainz": "Mainz",
+    "kassel": "Kassel",
+    "wuppertal": "Wuppertal",
+}
+
+
+def normalize_applied_location(raw: str) -> str:
+    """
+    Normalize a job location for applied-job bubble charts.
+
+    Rules:
+      - Case-insensitive \"remote\" / home-office alone → Remote
+      - Country-only (Germany / Deutschland / EU…) with no city → Remote
+      - Empty / unknown place without a city → Remote
+      - Known cities (Berlin, Munich/München, …) collapse to one canonical label
+      - Work-mode suffixes like (Hybrid)/(Remote)/(On-site) are ignored for city detection
+    """
+    text = (raw or "").strip()
+    if not text:
+        return "Remote"
+
+    lower = text.lower().strip()
+
+    # Pure remote labels (any casing)
+    if lower in {"remote", "homeoffice", "home office", "fully remote", "100% remote"}:
+        return "Remote"
+    if lower.startswith("remote ") or lower.startswith("remote-") or lower.startswith("remote/"):
+        return "Remote"
+
+    # Drop trailing work-mode tag for city / country detection
+    cleaned = _LOC_MODE_RE.sub("", text).strip(" ,;-|")
+    cleaned_lower = cleaned.lower()
+
+    if not cleaned_lower or cleaned_lower in _COUNTRY_ONLY:
+        return "Remote"
+
+    # "Greater Munich Metropolitan Area", "Frankfurt Rhine-Main…"
+    for key, canon in (
+        ("munich", "Munich"),
+        ("münchen", "Munich"),
+        ("muenchen", "Munich"),
+        ("frankfurt", "Frankfurt"),
+        ("berlin", "Berlin"),
+        ("hamburg", "Hamburg"),
+        ("leipzig", "Leipzig"),
+        ("cologne", "Cologne"),
+        ("köln", "Cologne"),
+        ("stuttgart", "Stuttgart"),
+    ):
+        if key in cleaned_lower and (
+            "metropolitan" in cleaned_lower
+            or "greater" in cleaned_lower
+            or "rhine" in cleaned_lower
+            or "area" in cleaned_lower
+        ):
+            return canon
+
+    # Split on common separators and map first known city token
+    # Prefer scanning all segments so "… Berlin" still hits Berlin
+    segments = re.split(r"[,|/•·]|\bor\b", cleaned, flags=re.IGNORECASE)
+    found = []
+    for seg in segments:
+        token = seg.strip().lower()
+        token = re.sub(r"\s+", " ", token)
+        if not token or token in _COUNTRY_ONLY:
+            continue
+        # Strip trailing country words: "Berlin Germany" unlikely; usually "Berlin"
+        if token in _CITY_CANON:
+            found.append(_CITY_CANON[token])
+            continue
+        # "Berlin Germany" / first word city
+        first = token.split(" ")[0]
+        if first in _CITY_CANON:
+            found.append(_CITY_CANON[first])
+            continue
+        # Substring match for compound like Berlin-Kreuzberg already in map;
+        # also "saxony" region alone is not a city → skip
+        for alias, canon in _CITY_CANON.items():
+            if token == alias or token.startswith(alias + " ") or token.startswith(alias + "-"):
+                found.append(canon)
+                break
+
+    if found:
+        # Multiple distinct cities in one posting → keep first (primary)
+        return found[0]
+
+    # No city detected → Remote (Germany-wide / vague)
+    return "Remote"
+
+
+def get_applied_location_stats() -> dict:
+    """
+    Aggregate applied-like jobs (applied/rejected/interview/offer) by normalized location.
+
+    Returns:
+        {
+          "total": int,
+          "locations": [{"name": "Berlin", "count": 12}, ...],  # count desc
+        }
+    """
+    from collections import Counter
+
+    collection = get_collection("matched_jobs")
+    counter: Counter = Counter()
+    total = 0
+    for doc in collection.find(
+        {"status": {"$in": list(APPLIED_STATUSES)}},
+        {"location": 1},
+    ):
+        total += 1
+        counter[normalize_applied_location(doc.get("location") or "")] += 1
+
+    locations = [
+        {"name": name, "count": count}
+        for name, count in counter.most_common()
+    ]
+    return {"total": total, "locations": locations}
 
 
 def get_daily_activity_stats(days: int = 120) -> list:

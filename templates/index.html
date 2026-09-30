@@ -380,16 +380,30 @@
       padding: 4px 2px;
     }
 
+    /* ── Dashboard row: locations + daily activity (equal halves) ── */
+    .dash-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: stretch;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
     /* ── Activity calendar heatmap ────────────────────────────────── */
     .cal-section {
-      padding: 18px 24px 20px;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg);
+      --cal-cell: 26px;
+      --cal-gap: 4px;
+      --cal-label: 18px;
+      padding: 14px 16px 16px 14px;
+      background: var(--surface);
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
     }
     .cal-header {
       display: flex; align-items: center; justify-content: space-between;
-      gap: 12px; flex-wrap: wrap;
-      margin-bottom: 14px;
+      gap: 10px; flex-wrap: wrap;
+      margin-bottom: 10px;
     }
     .cal-title {
       font-size: .88rem; font-weight: 700;
@@ -397,51 +411,56 @@
     }
     .cal-title span { color: var(--muted); font-weight: 500; margin-left: 8px; }
     .cal-legend {
-      display: flex; align-items: center; gap: 6px;
-      font-size: .72rem; color: var(--muted);
+      display: flex; align-items: center; gap: 5px;
+      font-size: .68rem; color: var(--muted);
     }
     .cal-legend .swatch {
-      width: 12px; height: 12px; border-radius: 3px;
+      width: 13px; height: 13px; border-radius: 3px;
       border: 1px solid var(--border);
     }
     .cal-body {
-      display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;
+      display: flex;
+      flex-direction: row;
+      gap: 14px;
+      align-items: stretch;
+      justify-content: flex-start;
+      flex: 1;
+      min-width: 0;
     }
     .cal-wrap {
-      display: flex; gap: 6px; overflow-x: auto;
-      padding-bottom: 4px;
+      display: flex; gap: 8px; overflow-x: auto;
+      padding-bottom: 2px;
+      flex: 0 1 auto;
+      min-width: 0;
+      max-width: 100%;
+      align-items: flex-start;
     }
     .cal-dow {
       display: grid;
-      grid-template-rows: 16px repeat(7, 14px);
-      gap: 3px;
-      font-size: .65rem; color: var(--muted);
-      padding-right: 4px;
+      grid-template-rows: var(--cal-label) repeat(7, var(--cal-cell));
+      gap: var(--cal-gap);
+      font-size: .68rem; color: var(--muted);
+      padding-right: 2px;
       flex-shrink: 0;
     }
     .cal-dow span {
-      display: flex; align-items: center; height: 14px; line-height: 1;
+      display: flex; align-items: center; height: var(--cal-cell); line-height: 1;
     }
-    .cal-dow .spacer { height: 16px; }
-    .cal-months {
-      display: flex; gap: 3px;
-    }
-    .cal-month-col {
-      display: flex; flex-direction: column; gap: 3px;
-    }
+    .cal-dow .spacer { height: var(--cal-label); }
+    .cal-months { display: flex; gap: var(--cal-gap); }
+    .cal-month-col { display: flex; flex-direction: column; gap: var(--cal-gap); }
     .cal-month-label {
-      height: 16px; font-size: .65rem; color: var(--muted);
-      line-height: 16px; white-space: nowrap;
-      overflow: hidden;
+      height: var(--cal-label); font-size: .7rem; color: var(--muted);
+      line-height: var(--cal-label); white-space: nowrap; overflow: hidden;
     }
     .cal-week {
       display: grid;
-      grid-template-rows: repeat(7, 14px);
-      gap: 3px;
+      grid-template-rows: repeat(7, var(--cal-cell));
+      gap: var(--cal-gap);
     }
     .cal-cell {
-      width: 14px; height: 14px;
-      border-radius: 3px;
+      width: var(--cal-cell); height: var(--cal-cell);
+      border-radius: 4px;
       background: var(--surface);
       border: 1px solid var(--border);
       cursor: pointer;
@@ -450,6 +469,8 @@
     }
     .cal-cell.empty {
       background: transparent; border-color: transparent; cursor: default;
+      /* Beat the global .empty padding so blank days stay cell-sized */
+      padding: 0;
     }
     .cal-cell:not(.empty):hover,
     .cal-cell.selected {
@@ -465,38 +486,197 @@
     .cal-cell.l4 { background: #6c8cff; border-color: #6c8cff; }
 
     .cal-detail {
-      flex: 1; min-width: 220px; max-width: 320px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px 16px;
+      flex: 1 1 180px;
+      width: auto;
+      max-width: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      padding: var(--cal-label) 0 0; /* align with month-label row above cells */
+      min-width: 150px;
+      align-self: stretch;
     }
     .cal-detail-date {
-      font-size: .82rem; font-weight: 700;
-      color: var(--text); margin-bottom: 10px;
+      font-size: .78rem; font-weight: 650;
+      color: var(--text);
+      margin-bottom: 0;
+      line-height: 1.25;
+      min-height: 1.4em;
     }
     .cal-detail-date.muted { color: var(--muted); font-weight: 500; }
     .cal-metrics {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 8px;
+      flex: 1;
     }
     .cal-metric {
-      background: var(--surface2);
+      background: var(--bg);
+      border: 1px solid var(--border);
       border-radius: 8px;
       padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 64px;
     }
     .cal-metric .m-num {
-      font-size: 1.15rem; font-weight: 700; line-height: 1.1;
+      font-size: 1.25rem; font-weight: 750; line-height: 1.1;
     }
     .cal-metric .m-label {
-      font-size: .68rem; color: var(--muted); margin-top: 3px;
+      font-size: .68rem; color: var(--muted); margin-top: 4px;
+      line-height: 1.2;
     }
     .cal-metric.m-clicked .m-num { color: var(--accent); }
     .cal-metric.m-german  .m-num { color: #ef4444; }
     .cal-metric.m-matched .m-num { color: #f59e0b; }
     .cal-metric.m-applied .m-num { color: var(--applied); }
 
+    /* ── Applied location bubbles (light Apple glass) ─────────────── */
+    .loc-section {
+      padding: 14px 18px 16px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      min-width: 0;
+    }
+    .loc-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .loc-title {
+      font-size: .88rem; font-weight: 700;
+      color: var(--text); letter-spacing: .02em;
+    }
+    .loc-title span { color: var(--muted); font-weight: 500; margin-left: 8px; }
+    .loc-subtitle {
+      font-size: .72rem;
+      color: var(--muted);
+    }
+    .loc-bubbles {
+      position: relative;
+      width: 100%;
+      height: 260px;
+      overflow: hidden;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .loc-bubble {
+      --size: 56px;
+      --bubble: rgba(108, 140, 255, .48);
+      --bubble-ink: #f8fafc;
+      position: absolute;
+      left: 0; top: 0;
+      width: var(--size);
+      height: var(--size);
+      margin: 0;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: default;
+      transform: translate(-50%, -50%);
+      border: none;
+      /* Flat tint plus a short top sheen — translucent glass, no rim */
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,.06) 46%, rgba(255,255,255,0) 100%),
+        var(--bubble);
+      backdrop-filter: blur(10px) saturate(1.4);
+      -webkit-backdrop-filter: blur(10px) saturate(1.4);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35);
+      transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+      padding: 6px;
+      line-height: 1.1;
+      z-index: 1;
+    }
+    .loc-bubble:hover {
+      z-index: 5;
+      transform: translate(-50%, -50%) scale(1.07);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .4),
+        0 8px 18px rgba(0, 0, 0, .22);
+      filter: brightness(1.08);
+    }
+    .loc-bubble .lb-name {
+      font-size: clamp(9px, calc(var(--size) * 0.17), 14px);
+      font-weight: 700;
+      color: var(--bubble-ink);
+      max-width: 88%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-shadow: none;
+      transition: opacity .15s ease, transform .15s ease;
+    }
+    .loc-bubble .lb-count {
+      position: absolute;
+      left: 50%;
+      bottom: 16%;
+      transform: translateX(-50%) translateY(4px);
+      font-size: clamp(11px, calc(var(--size) * 0.22), 17px);
+      font-weight: 800;
+      color: var(--bubble-ink);
+      letter-spacing: -.02em;
+      opacity: 0;
+      pointer-events: none;
+      text-shadow: none;
+      transition: opacity .15s ease, transform .15s ease;
+      white-space: nowrap;
+    }
+    .loc-bubble:hover .lb-name {
+      transform: translateY(-7px);
+      opacity: .92;
+    }
+    .loc-bubble:hover .lb-count {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .loc-empty {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .8rem;
+      color: var(--muted);
+    }
+
+    @media (max-width: 900px) {
+      .dash-row {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
+      .loc-section {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      .cal-section {
+        --cal-cell: 22px;
+        --cal-gap: 3px;
+      }
+      .cal-body { flex-wrap: wrap; }
+      .cal-detail {
+        flex: 1 1 100%;
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        padding-top: 4px;
+      }
+      .cal-metrics { grid-template-columns: repeat(4, 1fr); }
+    }
     @media (max-width: 640px) {
-      .cal-detail { max-width: none; width: 100%; }
+      .loc-bubbles { height: 220px; }
+      .cal-metrics { grid-template-columns: repeat(2, 1fr); }
     }
 
     /* ── Toolbar ──────────────────────────────────────────────────── */
@@ -1452,10 +1632,21 @@
   </div>
 </div>
 
-<!-- ── Activity calendar heatmap ───────────────────────────────────── -->
+<!-- ── Locations + Daily Activity (same row) ──────────────────────── -->
+<div class="dash-row" id="dashRow">
+<div class="loc-section" id="locSection">
+  <div class="loc-header">
+    <div class="loc-title">Applied Locations <span>hover for count</span></div>
+    <div class="loc-subtitle" id="locSubtitle">Applied · rejected · interview · offer</div>
+  </div>
+  <div class="loc-bubbles" id="locBubbles">
+    <div class="loc-empty">Loading…</div>
+  </div>
+</div>
+
 <div class="cal-section" id="calSection">
   <div class="cal-header">
-    <div class="cal-title">Daily Activity <span>last 17 weeks</span></div>
+    <div class="cal-title">Daily Activity <span>last 2 months</span></div>
     <div class="cal-legend">
       Less
       <span class="swatch l0" style="background:#1a1d27"></span>
@@ -1502,6 +1693,7 @@
       </div>
     </div>
   </div>
+</div>
 </div>
 
 <!-- ── Stats bar ───────────────────────────────────────────────────── -->
@@ -1886,6 +2078,150 @@ async function loadJourney() {
   }
 }
 
+/* ── Applied location bubbles ────────────────────────────────────── */
+/* Same hues as the funnel / daily-activity numbers, washed to glass. */
+const LOC_BUBBLE_COLORS = [
+  { fill: 'rgba(108, 140, 255, .72)', ink: '#f8fafc' }, // blue   — clicked
+  { fill: 'rgba(239, 68, 68, .68)',   ink: '#f8fafc' }, // red    — german
+  { fill: 'rgba(245, 158, 11, .74)',  ink: '#f8fafc' }, // orange — matched
+  { fill: 'rgba(251, 191, 36, .82)',  ink: '#1c1408' }, // yellow — highlight
+  { fill: 'rgba(34, 197, 94, .68)',   ink: '#f8fafc' }, // green  — applied
+];
+
+function packLocationBubbles(items, width, height) {
+  // Greedy circle pack: largest first, nest tightly around the center.
+  const cx = width / 2;
+  const cy = height / 2;
+  const placed = [];
+  const pad = 2;
+
+  for (const item of items) {
+    if (!placed.length) {
+      placed.push({ ...item, x: cx, y: cy });
+      continue;
+    }
+
+    let best = null;
+    for (const other of placed) {
+      const ring = other.r + item.r + pad;
+      for (let a = 0; a < 360; a += 8) {
+        const rad = (a * Math.PI) / 180;
+        const x = other.x + Math.cos(rad) * ring;
+        const y = other.y + Math.sin(rad) * ring;
+        if (
+          x - item.r < pad ||
+          x + item.r > width - pad ||
+          y - item.r < pad ||
+          y + item.r > height - pad
+        ) {
+          continue;
+        }
+        let overlaps = false;
+        for (const p of placed) {
+          if (Math.hypot(x - p.x, y - p.y) < p.r + item.r + pad - 0.5) {
+            overlaps = true;
+            break;
+          }
+        }
+        if (overlaps) continue;
+        const score = Math.hypot(x - cx, y - cy);
+        if (!best || score < best.score) best = { x, y, score };
+      }
+    }
+
+    if (best) {
+      placed.push({ ...item, x: best.x, y: best.y });
+    } else {
+      // Fallback: slight spiral outward from center
+      const n = placed.length;
+      const ang = n * 2.4;
+      const dist = 20 + n * 6;
+      placed.push({
+        ...item,
+        x: Math.min(width - item.r - pad, Math.max(item.r + pad, cx + Math.cos(ang) * dist)),
+        y: Math.min(height - item.r - pad, Math.max(item.r + pad, cy + Math.sin(ang) * dist)),
+      });
+    }
+  }
+  return placed;
+}
+
+function renderLocationBubbles(locations, total) {
+  const root = document.getElementById('locBubbles');
+  if (!root) return;
+
+  const width = Math.max(root.clientWidth || 640, 320);
+  const height = Math.max(root.clientHeight || 280, 200);
+  const maxCount = Math.max(...locations.map(l => l.count || 0), 1);
+  const minR = 22;
+  const maxR = Math.min(58, Math.floor(Math.min(width, height) * 0.22));
+
+  const items = locations.map((loc, i) => {
+    const count = loc.count || 0;
+    const t = Math.sqrt(count / maxCount);
+    const r = Math.round(minR + (maxR - minR) * t);
+    const palette = LOC_BUBBLE_COLORS[i % LOC_BUBBLE_COLORS.length];
+    return {
+      name: loc.name || 'Remote',
+      count,
+      r,
+      color: palette.fill,
+      ink: palette.ink,
+    };
+  });
+
+  const packed = packLocationBubbles(items, width, height);
+  root.innerHTML = packed.map(b => {
+    const size = b.r * 2;
+    return `
+      <div class="loc-bubble"
+           style="--size:${size}px; --bubble:${b.color}; --bubble-ink:${b.ink}; left:${b.x}px; top:${b.y}px"
+           aria-label="${escHtml(b.name)}: ${b.count}">
+        <span class="lb-name">${escHtml(b.name)}</span>
+        <span class="lb-count">${b.count}</span>
+      </div>`;
+  }).join('');
+}
+
+let _locStatsCache = null;
+let _locResizeTimer = null;
+
+async function loadLocationStats() {
+  const root = document.getElementById('locBubbles');
+  const sub = document.getElementById('locSubtitle');
+  if (!root) return;
+  try {
+    const res = await fetch('/api/stats/locations');
+    const data = await res.json();
+    const locations = data.locations || [];
+    const total = data.total || 0;
+    _locStatsCache = { locations, total };
+
+    if (sub) {
+      sub.textContent = total
+        ? `${total} applied-like · hover a bubble for count`
+        : 'Applied · rejected · interview · offer';
+    }
+    if (!locations.length) {
+      root.innerHTML = '<div class="loc-empty">No applied jobs yet</div>';
+      return;
+    }
+    // Wait a frame so clientWidth is correct after layout
+    requestAnimationFrame(() => renderLocationBubbles(locations, total));
+  } catch (_) {
+    root.innerHTML = '<div class="loc-empty">Failed to load locations</div>';
+  }
+}
+
+window.addEventListener('resize', () => {
+  clearTimeout(_locResizeTimer);
+  _locResizeTimer = setTimeout(() => {
+    if (_locStatsCache?.locations?.length) {
+      renderLocationBubbles(_locStatsCache.locations, _locStatsCache.total);
+    }
+  }, 120);
+});
+
 /* ── Activity calendar heatmap ───────────────────────────────────── */
 let calDaysByDate = {};
 let calSelectedDate = null;
@@ -1931,8 +2267,8 @@ async function loadDailyStats() {
   if (!container) return;
 
   try {
-    // ~17 weeks ≈ 119 days so the grid fills nicely
-    const res = await fetch('/api/stats/daily?days=119');
+    // ~2 months so it fits beside the location bubbles
+    const res = await fetch('/api/stats/daily?days=61');
     const data = await res.json();
     const days = data.days || [];
     calDaysByDate = {};
@@ -2603,6 +2939,7 @@ async function saveTimeline(jobId, timeline) {
   refreshProgressUI(jobId, data.application_timeline || timeline, data.status);
   loadStats();
   loadJourney();
+  loadLocationStats();
   loadDailyStats();
   return data;
 }
@@ -2684,6 +3021,7 @@ async function updateSideStatus(select) {
     showToast(`✅ Status updated to "${STATUS_LABEL[status]}"`);
     loadStats();
     loadJourney();
+    loadLocationStats();
     loadDailyStats();
   } catch (err) {
     showToast('❌ Status update failed', 'err');
@@ -2885,6 +3223,7 @@ async function deleteMatchedJob(jobId, btn) {
     // Background stats only — do not reload the job list (no spinner / flash)
     loadStats();
     loadJourney();
+    loadLocationStats();
     loadDailyStats();
     showToast('🗑 Job deleted');
   } catch (err) {
@@ -3027,6 +3366,7 @@ function escHtml(str) {
 function refreshAll() {
   loadStats();
   loadJourney();
+  loadLocationStats();
   loadDailyStats();
   loadJobs();
 }
@@ -3065,6 +3405,7 @@ function refreshAll() {
 
 loadStats();
 loadJourney();
+loadLocationStats();
 loadDailyStats();
 setLayout(currentLayout);
 loadJobs();

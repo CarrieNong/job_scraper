@@ -23,6 +23,7 @@ from core.db_mongo import (
     get_collection,
     get_scraper_stats,
     get_daily_activity_stats,
+    get_applied_location_stats,
     get_unmatched_jobs,
     count_unmatched_jobs,
     _parse_filter_date,
@@ -737,6 +738,16 @@ def api_stats_daily():
         days = 120
     days = max(7, min(days, 366))
     return jsonify({"days": get_daily_activity_stats(days=days)})
+
+
+@app.route("/api/stats/locations")
+def api_stats_locations():
+    """
+    Location mix for applied-like jobs (applied / rejected / interview / offer).
+
+    Cities are normalized; country-only / no-city labels count as Remote.
+    """
+    return jsonify(get_applied_location_stats())
 
 
 @app.route("/api/journey")
