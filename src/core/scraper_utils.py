@@ -31,8 +31,10 @@ _EXCLUDE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in TITLE_EXCLUDE_KEYWORD
 # Normalize hyphens/underscores so "full-stack" matches "Full Stack"
 _KEYWORD_SPLIT = re.compile(r"[-_\s]+")
 
-# Indeed job keys (jk) appear in URLs and as DOM ids with job_/sj_ prefixes.
+# Indeed job keys appear as jk= (viewjob) or vjk= (SERP selected card),
+# and as DOM ids with job_/sj_ prefixes.
 _INDEED_JK_RE = re.compile(r"[?&]jk=([a-zA-Z0-9]+)")
+_INDEED_VJK_RE = re.compile(r"[?&]vjk=([a-zA-Z0-9]+)")
 _INDEED_ID_PREFIXES = ("job_", "sj_")
 
 
@@ -56,10 +58,18 @@ def indeed_job_id_variants(job_id: str) -> list:
 
 
 def extract_indeed_jk_from_url(url: str) -> str:
-    """Extract the Indeed job key from a viewjob / rc/clk URL."""
+    """
+    Extract the Indeed job key from a URL.
+
+    Prefers jk= (viewjob / rc/clk); falls back to vjk= (SERP selected card).
+    Returns the bare key only (no jk_/vjk_ prefix).
+    """
     if not url:
         return ""
     m = _INDEED_JK_RE.search(url)
+    if m:
+        return m.group(1)
+    m = _INDEED_VJK_RE.search(url)
     return m.group(1) if m else ""
 
 
@@ -78,6 +88,34 @@ _INDEED_LOCATION_SKIP = {
     "befristet",
     "unbefristet",
 }
+
+# Indeed metadata often uses middle-dot / bullet separators between company,
+# location, and work-mode. Those characters alone must never become location.
+_INDEED_META_SEP_RE = re.compile(r"[•·∙⋅|]+")
+_INDEED_SEP_ONLY_RE = re.compile(r"^[\s•·∙⋅|\-\u2013\u2014]+$")
+
+
+def _indeed_meta_parts(text: str) -> list:
+    """Split a metadata line on Indeed bullet separators; drop empties."""
+    if not text:
+        return []
+    parts = []
+    for chunk in _INDEED_META_SEP_RE.split(text):
+        chunk = chunk.strip()
+        if chunk and not _INDEED_SEP_ONLY_RE.match(chunk):
+            parts.append(chunk)
+    return parts
+
+
+def _is_plausible_indeed_location(text: str, company: str) -> bool:
+    """Reject separators, company name echoes, and work-mode chips."""
+    if not text or _INDEED_SEP_ONLY_RE.match(text):
+        return False
+    if company and text == company:
+        return False
+    if text.lower() in _INDEED_LOCATION_SKIP:
+        return False
+    return True
 
 
 def extract_indeed_detail_meta(scope) -> tuple:
@@ -103,20 +141,37 @@ def extract_indeed_detail_meta(scope) -> tuple:
 
     location = ""
 
-    # Compact header often has a single line: "Berlin • Hybrides Arbeiten"
-    compact = scope.locator('[data-testid="desktop-embedded-compact-header"]')
-    if compact.count() > 0:
-        compact_text = safe_text(compact)
-        for line in compact_text.splitlines():
-            line = line.strip()
-            if "•" in line and company and company not in line:
-                location = line.split("•", 1)[0].strip()
+    # Dedicated location nodes when Indeed exposes them
+    for sel in (
+        '[data-testid="job-location"]',
+        '[data-testid="inlineHeader-companyLocation"]',
+        '[data-testid="jobsearch-JobInfoHeader-companyLocation"]',
+        '[data-testid="company-info-metadata"] [data-testid="job-location"]',
+    ):
+        try:
+            raw = safe_text(scope.locator(sel))
+        except Exception:
+            raw = ""
+        for part in _indeed_meta_parts(raw) or ([raw.strip()] if raw and raw.strip() else []):
+            if _is_plausible_indeed_location(part, company):
+                location = part
                 break
-            if "•" in line and not line.startswith("•"):
-                # "Berlin • Hybrides Arbeiten" (company is a separate <a>)
-                left = line.split("•", 1)[0].strip()
-                if left and left != company:
-                    location = left
+        if location:
+            break
+
+    # Compact header often has a single line: "Berlin · Hybrides Arbeiten"
+    if not location:
+        compact = scope.locator('[data-testid="desktop-embedded-compact-header"]')
+        if compact.count() > 0:
+            compact_text = safe_text(compact)
+            for line in compact_text.splitlines():
+                parts = _indeed_meta_parts(line)
+                # Prefer the left-most non-company, non-work-mode token
+                for part in parts:
+                    if _is_plausible_indeed_location(part, company):
+                        location = part
+                        break
+                if location:
                     break
 
     if not location:
@@ -125,21 +180,36 @@ def extract_indeed_detail_meta(scope) -> tuple:
             lines = [
                 ln.strip()
                 for ln in safe_text(meta).splitlines()
-                if ln.strip() and ln.strip() != "•"
+                if ln.strip() and not _INDEED_SEP_ONLY_RE.match(ln.strip())
             ]
             if company and lines and lines[0] == company:
                 lines = lines[1:]
             for ln in lines:
-                if "•" in ln:
-                    ln = ln.split("•", 1)[0].strip()
-                if not ln or ln == company:
-                    continue
-                if ln.lower() in _INDEED_LOCATION_SKIP:
-                    continue
-                location = ln
-                break
+                parts = _indeed_meta_parts(ln) or [ln]
+                for part in parts:
+                    if _is_plausible_indeed_location(part, company):
+                        location = part
+                        break
+                if location:
+                    break
+
+    # Final guard: never persist a bullet/separator as location
+    if location and not _is_plausible_indeed_location(location, company):
+        location = ""
 
     return company, location
+
+
+def scrub_bullet_location(location: str) -> str:
+    """
+    Clear location values that are only Indeed/UI separators (e.g. '·' / '•').
+
+    Safe for any source — a separator-only string is never a real place.
+    """
+    text = (location or "").strip()
+    if not text or _INDEED_SEP_ONLY_RE.match(text):
+        return ""
+    return text
 
 # Too little text to classify reliably (failed/empty detail panels).
 _MIN_LANG_CHARS = 40

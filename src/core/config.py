@@ -77,6 +77,7 @@ TITLE_EXCLUDE_KEYWORDS = [
     r"\bKubernetes\b",
     r"\bLinux\b",
     r"\bApplied\s+Researcher\b",
+    r"\bApplied\s+AI\s+Engineer\b",
     r"\bMachine\s+Learning\b",
     r"\bPHP\b",
     r"\bRobot\s+Learning\s+Engineer\b",
@@ -99,6 +100,7 @@ TITLE_EXCLUDE_KEYWORDS = [
     r"\bExecutive\b",
     r"\bMLOps\b",
     r"\bSales\s+Engineer\b",
+    r"\bCustomer\s+Engineer\b",
     r"\bQuality\s+Management\b",
     r"\bDeep\s+Learning\b",
     r"\bSupport\s+Engineer\b",
@@ -110,6 +112,7 @@ TITLE_EXCLUDE_KEYWORDS = [
     r"\bML\s+Engineer\b",
     r"\bNDE\s+Engineer\b",
     r"\bMechanical\s+Engineer\b",
+    r"\bWorking\s+Student\b",
 ]
 
 

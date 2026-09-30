@@ -300,7 +300,7 @@ def get_daily_activity_stats(days: int = 120) -> list:
           "title_clicked": int,    # detail pages opened
           "german_filtered": int,  # non-English JDs skipped (UI: German Filtered)
           "ai_matched": int,       # jobs copied to matched_jobs
-          "applied": int,          # applied + rejected + interview
+          "applied": int,          # applied + rejected + interview + offer (by applied_at)
         }
 
     title_clicked / german_filtered come from daily scraper_stats docs.
@@ -361,16 +361,16 @@ def get_daily_activity_stats(days: int = 120) -> list:
         if row["_id"]:
             buckets[row["_id"]]["ai_matched"] = int(row["count"])
 
-    # 4) Applied = applied + rejected + interview, dated by applied_at
-    #    (falls back to updated_at when applied_at was never set)
+    # 4) Applied = applied + rejected + interview + offer, dated by applied_at only.
+    #    Do NOT fall back to updated_at: editing notes/highlights/status on an old
+    #    applied job bumps updated_at and would inflate "applied today".
     for row in db["matched_jobs"].aggregate([
-        {"$match": {"status": {"$in": list(APPLIED_STATUSES)}}},
-        {"$project": {
-            "apply_date": {"$ifNull": ["$applied_at", "$updated_at"]},
+        {"$match": {
+            "status": {"$in": list(APPLIED_STATUSES)},
+            "applied_at": {"$ne": None, "$gte": start, "$lte": end},
         }},
-        {"$match": {"apply_date": {"$gte": start, "$lte": end}}},
         {"$group": {
-            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$apply_date"}},
+            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$applied_at"}},
             "count": {"$sum": 1},
         }},
     ]):

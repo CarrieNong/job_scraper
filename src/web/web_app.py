@@ -28,6 +28,7 @@ from core.db_mongo import (
     _parse_filter_date,
     APPLIED_STATUSES,
 )
+from core.scraper_utils import indeed_job_id_variants
 
 load_dotenv()
 
@@ -570,6 +571,48 @@ def api_update_job_info(job_id: str):
         return jsonify({"error": "Job not found"}), 404
 
     return jsonify({"ok": True})
+
+
+@app.route("/api/jobs/<job_id>", methods=["DELETE"])
+def api_delete_job(job_id: str):
+    """
+    Permanently delete a matched job from the database.
+
+    Removes the matched_jobs document and the corresponding jobs document
+    (same job_id + source) so it will not reappear in Tracker or unmatched.
+    """
+    try:
+        oid = ObjectId(job_id)
+    except Exception:
+        return jsonify({"error": "Invalid job ID"}), 400
+
+    matched_col = get_collection("matched_jobs")
+    job = matched_col.find_one({"_id": oid})
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    jid = job.get("job_id") or ""
+    source = job.get("source") or ""
+
+    matched_col.delete_one({"_id": oid})
+
+    jobs_deleted = 0
+    if jid and source:
+        jobs_col = get_collection("jobs")
+        if source == "indeed":
+            variants = indeed_job_id_variants(jid) or [jid]
+            result = jobs_col.delete_many({"job_id": {"$in": variants}, "source": "indeed"})
+        else:
+            result = jobs_col.delete_many({"job_id": jid, "source": source})
+        jobs_deleted = int(result.deleted_count)
+
+    return jsonify({
+        "ok": True,
+        "deleted_matched": 1,
+        "deleted_jobs": jobs_deleted,
+        "title": job.get("title") or "",
+        "company": job.get("company") or "",
+    })
 
 
 @app.route("/api/unmatched-jobs/<job_id>/status", methods=["PATCH"])

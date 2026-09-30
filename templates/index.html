@@ -1155,6 +1155,22 @@
       border-color: var(--accent);
       color: #fff;
     }
+    .tl-modal-actions .tl-confirm.tl-danger {
+      background: #ef4444;
+      border-color: #ef4444;
+      color: #fff;
+    }
+    .tl-modal-actions .tl-confirm.tl-danger:hover { filter: brightness(1.08); }
+    .tl-modal .tl-job-name {
+      font-size: .84rem;
+      color: var(--text);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      line-height: 1.4;
+      word-break: break-word;
+    }
 
     /* Notes */
     .notes-wrap { display: flex; flex-direction: column; gap: 6px; }
@@ -1339,6 +1355,24 @@
     }
     .card:hover .edit-info-btn { opacity: 1; }
     .edit-info-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .delete-job-btn {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 4px;
+      padding: 1px 5px;
+      font-size: .7rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--muted);
+      cursor: pointer;
+      vertical-align: middle;
+      transition: border-color .15s, color .15s, opacity .15s;
+      opacity: 0;
+    }
+    .card:hover .delete-job-btn { opacity: 1; }
+    .delete-job-btn:hover { border-color: #ef4444; color: #ef4444; }
 
     .info-edit { display: none; flex-direction: column; gap: 6px; margin-top: 2px; }
     .info-edit.active { display: flex; }
@@ -2200,7 +2234,8 @@ function renderCard(job) {
           <div class="info-view">
             <div class="card-title">
               <span class="card-title-text">${escHtml(job.title || '(No Title)')}</span>
-              <button class="edit-info-btn" onclick="openEditInfo(this)" title="Edit title / company / location">✏️ Edit</button>
+              <button class="edit-info-btn" onclick="event.stopPropagation(); openEditInfo(this)" title="Edit title / company / location">✏️ Edit</button>
+              <button class="delete-job-btn" onclick="event.stopPropagation(); deleteMatchedJob('${job._id}', this)" title="Delete this job permanently">🗑 Delete</button>
             </div>
             <div class="card-company">${escHtml(job.company || '')}${job.location ? ' · ' + escHtml(job.location) : ''}</div>
           </div>
@@ -2506,6 +2541,32 @@ function askTimelineTime({ title, hint, initial }) {
   });
 }
 
+function askConfirm({ title, hint, detail, confirmLabel = 'Confirm', danger = false }) {
+  return new Promise(resolve => {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'tl-modal-backdrop';
+    backdrop.innerHTML = `
+      <div class="tl-modal" role="dialog" aria-modal="true">
+        <h3>${escHtml(title)}</h3>
+        ${hint ? `<p>${escHtml(hint)}</p>` : ''}
+        ${detail ? `<div class="tl-job-name">${escHtml(detail)}</div>` : ''}
+        <div class="tl-modal-actions">
+          <button type="button" class="tl-cancel">Cancel</button>
+          <button type="button" class="tl-confirm${danger ? ' tl-danger' : ''}">${escHtml(confirmLabel)}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(backdrop);
+    const close = (val) => { backdrop.remove(); resolve(val); };
+    backdrop.querySelector('.tl-cancel').onclick = () => close(false);
+    backdrop.querySelector('.tl-confirm').onclick = () => close(true);
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(false); });
+    backdrop.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close(false);
+    });
+    backdrop.querySelector('.tl-confirm').focus();
+  });
+}
+
 function refreshProgressUI(jobId, timeline, status) {
   jobTimelines[jobId] = timeline;
   const card = document.getElementById(`card-${jobId}`);
@@ -2793,6 +2854,93 @@ function openEditInfo(btn) {
   const edit = block.querySelector('.info-edit');
   edit.classList.add('active');
   edit.querySelector('[data-field="title"]').select();
+}
+
+async function deleteMatchedJob(jobId, btn) {
+  const card = btn.closest('.card') || document.getElementById(`card-${jobId}`);
+  const title = card?.querySelector('.card-title-text')?.textContent?.trim()
+    || card?.querySelector('.row-title')?.textContent?.trim()
+    || 'this job';
+
+  const ok = await askConfirm({
+    title: 'Delete this job?',
+    hint: 'Removes it from matched_jobs and jobs. It will not come back unless scraped again.',
+    detail: title,
+    confirmLabel: 'Delete',
+    danger: true,
+  });
+  if (!ok) return;
+
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Delete failed');
+    }
+    delete jobHighlights[jobId];
+    delete jobTimelines[jobId];
+    removeMatchedCardSilently(card);
+    // Background stats only — do not reload the job list (no spinner / flash)
+    loadStats();
+    loadJourney();
+    loadDailyStats();
+    showToast('🗑 Job deleted');
+  } catch (err) {
+    if (btn) btn.disabled = false;
+    showToast(`❌ ${err.message || 'Delete failed'}`, 'err');
+  }
+}
+
+function removeMatchedCardSilently(card) {
+  if (!card) return;
+
+  const group = card.closest('.date-group-cards');
+  const header = group?.previousElementSibling?.classList?.contains('date-group-header')
+    ? group.previousElementSibling
+    : null;
+
+  const finish = () => {
+    card.remove();
+
+    // Update date-group count or remove empty group
+    if (group) {
+      const remaining = group.querySelectorAll('.card').length;
+      if (remaining === 0) {
+        header?.remove();
+        group.remove();
+      } else if (header) {
+        const countEl = header.querySelector('.dg-count');
+        if (countEl) countEl.textContent = `${remaining} jobs`;
+      }
+    }
+
+    // Bump local total label without refetch
+    const label = document.getElementById('countLabel');
+    if (label) {
+      const m = (label.textContent || '').match(/(\d+)/);
+      if (m) {
+        const next = Math.max(0, Number(m[1]) - 1);
+        label.textContent = `Total ${next}`;
+      }
+    }
+
+    // Empty state if grid has no cards left
+    const grid = document.getElementById('jobGrid');
+    if (grid && !grid.querySelector('.card')) {
+      grid.innerHTML = `
+        <div class="empty">
+          <h2>No Matched Jobs</h2>
+          <p>Try different filters?</p>
+        </div>`;
+    }
+  };
+
+  card.style.transition = 'opacity .18s ease, transform .18s ease';
+  card.style.opacity = '0';
+  card.style.transform = 'translateY(-4px) scale(0.98)';
+  setTimeout(finish, 180);
 }
 
 function cancelEditInfo(btn) {

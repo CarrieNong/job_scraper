@@ -24,7 +24,12 @@ from core.db_mongo import (
     is_job_id_exists,
     mark_job_as_matched,
 )
-from core.scraper_utils import strip_html, indeed_job_id_variants, is_usable_job_description
+from core.scraper_utils import (
+    strip_html,
+    indeed_job_id_variants,
+    is_usable_job_description,
+    scrub_bullet_location,
+)
 from matching.german_gate import (
     find_mandatory_german_requirement,
     german_disqualification_analysis,
@@ -95,7 +100,7 @@ def build_matching_prompt(job: Dict, user_profile: str, criteria: str) -> str:
 ## Job Information
 **Title**: {job.get('title', 'N/A')}
 **Company**: {job.get('company', 'N/A')}
-**Location**: {job.get('location', 'N/A')}
+**Location**: {scrub_bullet_location(job.get('location', '')) or 'N/A'}
 **Source**: {job.get('source', 'N/A')}
 **Link**: {job.get('link', 'N/A')}
 
@@ -532,7 +537,7 @@ def save_matched_job(job: Dict, analysis: Dict) -> bool:
             # Original job fields
             "title": job.get("title", ""),
             "company": job.get("company", ""),
-            "location": job.get("location", ""),
+            "location": scrub_bullet_location(job.get("location", "")),
             "link": job.get("link", ""),
             "job_id": job.get("job_id", ""),
             "source": job.get("source", ""),
