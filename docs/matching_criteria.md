@@ -53,7 +53,7 @@ Put that gap in `red_flags`, `missing_requirements`, `what_theyre_looking_for.un
 - Overall / frontend / software **> 7 years**
 - Backend-specific **> 1 year**. A range that includes 1 (for example "1–2 years") **passes**.
 
-Do not fail on the title "Senior" alone when the stated years are in range. Nice-to-have year requirements do not fail this gate. A Staff / Principal title with no excess year requirement does not fail it either.
+Do not fail on the title "Senior" alone when the stated years are in range. Nice-to-have year requirements do not fail this gate. 
 
 ### 4. DevOps / operations
 

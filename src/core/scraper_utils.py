@@ -144,6 +144,23 @@ def extract_indeed_detail_meta(scope) -> tuple:
 # Too little text to classify reliably (failed/empty detail panels).
 _MIN_LANG_CHARS = 40
 
+# Minimum usable JD length for AI matching. Shorter text is treated as empty
+# (failed scrape / UI chrome only) — scrapers retry, then still save with
+# description_empty=True; matcher skips AI and marks failed.
+MIN_JOB_DESCRIPTION_CHARS = _MIN_LANG_CHARS
+DESCRIPTION_FETCH_RETRIES = 3
+
+
+def is_usable_job_description(text: str) -> bool:
+    """
+    True if the scraped job description has enough real content to match on.
+
+    Empty / whitespace / tiny fragments fail. Scrapers still save those jobs
+    with description_empty=True; the AI matcher must not score them.
+    """
+    plain = strip_html(text or "").strip()
+    return len(plain) >= MIN_JOB_DESCRIPTION_CHARS
+
 # Ignore tiny fragments ("Berlin", "3.8") when estimating language share.
 _MIN_CHUNK_CHARS = 12
 

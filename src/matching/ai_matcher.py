@@ -24,7 +24,7 @@ from core.db_mongo import (
     is_job_id_exists,
     mark_job_as_matched,
 )
-from core.scraper_utils import strip_html, indeed_job_id_variants
+from core.scraper_utils import strip_html, indeed_job_id_variants, is_usable_job_description
 from matching.german_gate import (
     find_mandatory_german_requirement,
     german_disqualification_analysis,
@@ -599,6 +599,32 @@ def process_new_jobs(limit: Optional[int] = None, source: Optional[str] = None):
         print(f"Title: {job.get('title')}")
         print(f"Company: {job.get('company')}")
         print(f"Source: {job.get('source')}")
+
+        if not is_usable_job_description(job.get("description", "")):
+            print("⚠ Empty/missing job description — skip AI, mark failed")
+            processed_count += 1
+            mark_job_as_matched(
+                job.get("job_id"),
+                job.get("source"),
+                match_score=0,
+                analysis={
+                    "recommendation": "No",
+                    "special_match": False,
+                    "special_match_reasons": [],
+                    "disqualification_reason": "Missing job description",
+                    "match_reasons": [],
+                    "missing_requirements": [],
+                    "red_flags": ["Empty or missing job description"],
+                    "nice_to_have_matches": [],
+                    "summary": (
+                        "No usable job description scraped; "
+                        "skipped AI matching to avoid hallucinated scores."
+                    ),
+                    "what_youll_do": {"matched": [], "unmatched": []},
+                    "what_theyre_looking_for": {"matched": [], "unmatched": []},
+                },
+            )
+            continue
 
         german_reason = find_mandatory_german_requirement(job)
         if german_reason:

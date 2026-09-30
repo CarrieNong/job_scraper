@@ -25,12 +25,15 @@ from core.config import (
 from core.scraper_utils import (
     pause,
     safe_text,
+    strip_html,
     parse_args,
     connect_browser,
     open_scraper_page,
     goto_page,
     should_skip_title_before_click,
     is_non_english_job_detail,
+    is_usable_job_description,
+    DESCRIPTION_FETCH_RETRIES,
 )
 
 # LinkedIn configuration
@@ -42,6 +45,61 @@ SOURCE = LINKEDIN_CONFIG["source"]
 # LinkedIn selectors
 JOB_CARD_SELECTOR = LINKEDIN_CONFIG["selectors"]["job_card"]
 JOB_LINK_SELECTOR = LINKEDIN_CONFIG["selectors"]["job_link"]
+
+# Detail panel selectors — SDUI first, then classic LinkedIn layouts.
+_LINKEDIN_DETAIL_WAIT = (
+    '[data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.SemanticJobDetails"],'
+    " .job-details-jobs-unified-top-card__tertiary-description-container,"
+    " .jobs-box__html-content,"
+    " [id*='JobDetails_AboutTheJob']"
+)
+
+
+def extract_linkedin_description(page, job_id: str = "") -> str:
+    """
+    Pull JD text from the LinkedIn detail panel.
+
+    Tries the newer SemanticJobDetails SDUI layout first, then classic
+    About-the-job / jobs-box selectors. Returns "" if nothing usable is found.
+    """
+    # Primary: new LinkedIn SDUI layout
+    try:
+        screen_loc = page.locator(
+            '[data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.SemanticJobDetails"]'
+        )
+        if screen_loc.count() > 0:
+            lazy_col = screen_loc.locator('[data-testid="lazy-column"]').first
+            if lazy_col.count() > 0:
+                desc_text = (lazy_col.inner_text(timeout=8000) or "").strip()
+                if desc_text:
+                    return desc_text
+    except Exception:
+        pass
+
+    selectors = []
+    if job_id:
+        selectors.append(f"#JobDetails_AboutTheJob_jobs_{job_id}")
+    selectors.extend(
+        [
+            "[id*='JobDetails_AboutTheJob']",
+            ".jobs-box__html-content",
+        ]
+    )
+    for sel in selectors:
+        try:
+            loc = page.locator(sel).first
+            if loc.count() == 0:
+                continue
+            text = (safe_text(loc, timeout=5000) or "").strip()
+            if text:
+                return text
+            html = loc.inner_html(timeout=5000) or ""
+            text = strip_html(html).strip()
+            if text:
+                return text
+        except Exception:
+            continue
+    return ""
 
 
 def extract_job_id_from_url(url):
@@ -188,31 +246,36 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
             # Title passed + new job → count as a candidate we evaluated
             increment_scraper_stat("title_passed_clicked")
             job.click()
-            page.wait_for_selector(
-                ".job-details-jobs-unified-top-card__tertiary-description-container, .jobs-box__html-content",
-                timeout=15000,
-            )
+            page.wait_for_selector(_LINKEDIN_DETAIL_WAIT, timeout=15000)
             pause(1.0, 2.0)
 
             apply_number = safe_text(
                 page.locator(".job-details-jobs-unified-top-card__tertiary-description-container")
             )
 
-            desc_locator = page.locator(".jobs-box__html-content")
-            job_desc_text = safe_text(desc_locator, timeout=5000)
-            should_skip, lang, german_share = is_non_english_job_detail(job_desc_text)
-            print(
-                f"Job {index + 1}: description length {len(job_desc_text)}, "
-                f"language={lang or 'unknown'}, german_share={german_share:.0%}"
-            )
+            job_desc_text = ""
+            for attempt in range(1, DESCRIPTION_FETCH_RETRIES + 1):
+                job_desc_text = extract_linkedin_description(page, job_id)
+                if is_usable_job_description(job_desc_text):
+                    break
+                if attempt < DESCRIPTION_FETCH_RETRIES:
+                    print(
+                        f"Job {index + 1}: empty description, "
+                        f"retry {attempt}/{DESCRIPTION_FETCH_RETRIES - 1}"
+                    )
+                    pause(1.5, 3.0)
+                    try:
+                        page.wait_for_selector(_LINKEDIN_DETAIL_WAIT, timeout=8000)
+                    except PlaywrightTimeoutError:
+                        pass
 
-            if should_skip:
-                increment_scraper_stat("german_filtered")
+            desc_empty = not is_usable_job_description(job_desc_text)
+            if desc_empty:
                 print(
-                    f"Job {index + 1}: Non-English description ({lang}) detected, "
-                    f"skip save (german_filtered)"
+                    f"Job {index + 1}: description still empty after "
+                    f"{DESCRIPTION_FETCH_RETRIES} attempts — save anyway "
+                    f"(description_empty; AI will skip)"
                 )
-            else:
                 job_data = {
                     "title": title,
                     "company": company,
@@ -221,13 +284,43 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
                     "link": href_value,
                     "job_id": job_id,
                     "applicants": apply_number,
-                    "description": job_desc_text,
+                    "description": job_desc_text or "",
+                    "description_empty": True,
                     "source": SOURCE,
                 }
-
                 if save_job(job_data):
                     jobs_data.append(job_data)
-                    print(f"Job {index + 1}: saved job_id {job_id}")
+                    print(f"Job {index + 1}: saved job_id {job_id} (empty description)")
+            else:
+                should_skip, lang, german_share = is_non_english_job_detail(job_desc_text)
+                print(
+                    f"Job {index + 1}: description length {len(job_desc_text)}, "
+                    f"language={lang or 'unknown'}, german_share={german_share:.0%}"
+                )
+
+                if should_skip:
+                    increment_scraper_stat("german_filtered")
+                    print(
+                        f"Job {index + 1}: Non-English description ({lang}) detected, "
+                        f"skip save (german_filtered)"
+                    )
+                else:
+                    job_data = {
+                        "title": title,
+                        "company": company,
+                        "location": location,
+                        "status": status,
+                        "link": href_value,
+                        "job_id": job_id,
+                        "applicants": apply_number,
+                        "description": job_desc_text,
+                        "description_empty": False,
+                        "source": SOURCE,
+                    }
+
+                    if save_job(job_data):
+                        jobs_data.append(job_data)
+                        print(f"Job {index + 1}: saved job_id {job_id}")
 
             if random.random() < 0.3:
                 pause(1, 3, f"Job {index + 1}: extra think time")

@@ -30,10 +30,12 @@ from core.scraper_utils import (
     open_scraper_page,
     should_skip_title_before_click,
     is_non_english_job_detail,
+    is_usable_job_description,
     strip_html,
     normalize_indeed_job_id,
     extract_indeed_jk_from_url,
     extract_indeed_detail_meta,
+    DESCRIPTION_FETCH_RETRIES,
 )
 
 # Indeed configuration
@@ -47,6 +49,30 @@ JOB_CARD_SELECTOR = INDEED_CONFIG["selectors"]["job_card"]
 JOB_TITLE_SELECTOR = INDEED_CONFIG["selectors"]["job_title"]
 DETAIL_SELECTOR = INDEED_CONFIG["selectors"]["detail"]
 
+
+def extract_indeed_description(page, detail) -> str:
+    """Pull JD text from the Indeed detail panel via known selectors."""
+    description = ""
+    for sel in (
+        "#jobDescriptionText",
+        ".jobsearch-JobComponent-description",
+        ".simple-job-description-html",
+        DETAIL_SELECTOR,
+    ):
+        try:
+            loc = page.locator(sel).first
+            if loc.count() == 0:
+                continue
+            html = loc.inner_html(timeout=10000) or ""
+            description = strip_html(html)
+            if description:
+                return description
+        except Exception:
+            continue
+    try:
+        return strip_html(detail.inner_html(timeout=10000) or "")
+    except Exception:
+        return description
 
 
 def jobs_search_url(keyword, start=0):
@@ -178,40 +204,30 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
 
             detail = page.locator(DETAIL_SELECTOR).first
             description = ""
-            for sel in (
-                "#jobDescriptionText",
-                ".jobsearch-JobComponent-description",
-                ".simple-job-description-html",
-                DETAIL_SELECTOR,
-            ):
-                try:
-                    loc = page.locator(sel).first
-                    if loc.count() == 0:
-                        continue
-                    html = loc.inner_html(timeout=10000) or ""
-                    description = strip_html(html)
-                    if description:
-                        break
-                except Exception:
-                    continue
-            if not description:
-                description = strip_html(detail.inner_html(timeout=10000) or "")
+            for attempt in range(1, DESCRIPTION_FETCH_RETRIES + 1):
+                detail = page.locator(DETAIL_SELECTOR).first
+                description = extract_indeed_description(page, detail)
+                if is_usable_job_description(description):
+                    break
+                if attempt < DESCRIPTION_FETCH_RETRIES:
+                    print(
+                        f"Job {index + 1}: empty description, "
+                        f"retry {attempt}/{DESCRIPTION_FETCH_RETRIES - 1}"
+                    )
+                    pause(1.5, 3.0)
+                    try:
+                        page.wait_for_selector(DETAIL_SELECTOR, timeout=8000)
+                    except PlaywrightTimeoutError:
+                        pass
 
             company, location = extract_indeed_detail_meta(page)
-            should_skip, lang, german_share = is_non_english_job_detail(description)
-            print(
-                f"Job {index + 1}: description length {len(description)}, "
-                f"company={company or '(none)'}, location={location or '(none)'}, "
-                f"language={lang or 'unknown'}, german_share={german_share:.0%}"
-            )
-
-            if should_skip:
-                increment_scraper_stat("german_filtered")
+            desc_empty = not is_usable_job_description(description)
+            if desc_empty:
                 print(
-                    f"Job {index + 1}: Non-English description ({lang}) detected, "
-                    f"skip save (german_filtered)"
+                    f"Job {index + 1}: description still empty after "
+                    f"{DESCRIPTION_FETCH_RETRIES} attempts — save anyway "
+                    f"(description_empty; AI will skip)"
                 )
-            else:
                 job_data = {
                     "title": title,
                     "company": company,
@@ -220,13 +236,44 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
                     "link": href_value,
                     "job_id": job_id,
                     "applicants": "",
-                    "description": description,
+                    "description": description or "",
+                    "description_empty": True,
                     "source": SOURCE,
                 }
-
                 if save_job(job_data):
                     jobs_data.append(job_data)
-                    print(f"Job {index + 1}: saved job_id {job_id}")
+                    print(f"Job {index + 1}: saved job_id {job_id} (empty description)")
+            else:
+                should_skip, lang, german_share = is_non_english_job_detail(description)
+                print(
+                    f"Job {index + 1}: description length {len(description)}, "
+                    f"company={company or '(none)'}, location={location or '(none)'}, "
+                    f"language={lang or 'unknown'}, german_share={german_share:.0%}"
+                )
+
+                if should_skip:
+                    increment_scraper_stat("german_filtered")
+                    print(
+                        f"Job {index + 1}: Non-English description ({lang}) detected, "
+                        f"skip save (german_filtered)"
+                    )
+                else:
+                    job_data = {
+                        "title": title,
+                        "company": company,
+                        "location": location,
+                        "status": "new",
+                        "link": href_value,
+                        "job_id": job_id,
+                        "applicants": "",
+                        "description": description,
+                        "description_empty": False,
+                        "source": SOURCE,
+                    }
+
+                    if save_job(job_data):
+                        jobs_data.append(job_data)
+                        print(f"Job {index + 1}: saved job_id {job_id}")
 
             if random.random() < 0.3:
                 pause(1, 3, f"Job {index + 1}: extra think time")
