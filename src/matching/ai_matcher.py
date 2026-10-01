@@ -550,7 +550,8 @@ def save_matched_job(job: Dict, analysis: Dict) -> bool:
             
             # Metadata
             "status": "pending",  # pending, applied, interview, rejected, offer, …
-            "matched_at": datetime.utcnow(),
+            # Local wall clock — same basis as Telegram / Web "today" filters
+            "matched_at": datetime.now(),
             "applied_at": None,
             "application_timeline": [],
             "notes": "",

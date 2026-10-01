@@ -151,6 +151,17 @@ SCRAPED=$(echo "$STATS" | awk '{print $1}')
 MATCHED=$(echo "$STATS" | awk '{print $2}')
 log "Last 12 h: ${SCRAPED} jobs scraped, ${MATCHED} high-quality matches"
 
+# Push today's matched jobs to Telegram (works for /quick_jobs, cron, and launchd)
+log "Pushing today's matches to Telegram..."
+$PYTHON -c "
+import sys
+sys.path.insert(0, 'src')
+from core.match_digest import push_todays_matched_jobs
+push_todays_matched_jobs()
+" >> "$LOG_DIR/telegram_push_$(date +%Y%m%d).log" 2>&1 \
+  && log "✅ Telegram match digest sent" \
+  || log "⚠️  WARNING: Telegram match digest failed (see logs/telegram_push_*.log)"
+
 # macOS desktop notification
 osascript -e "display notification \"${SCRAPED} new jobs scraped, ${MATCHED} matched\" with title \"Light Scrape Done\" sound name \"Glass\"" 2>/dev/null || true
 

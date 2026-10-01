@@ -844,6 +844,63 @@
     .job-grid.layout-compact .card.expanded .card-body { display: flex; }
     .job-grid.layout-compact .card.expanded .row-chevron { transform: rotate(90deg); }
 
+    /* Shared action / track row wrappers (stack in cards; side-by-side in list) */
+    .card-actions-row,
+    .card-track-row,
+    .card-track-left {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-width: 0;
+    }
+    .job-grid.layout-compact .card-actions-row,
+    .job-grid.layout-compact .card-track-row,
+    .job-grid.layout-compact .card-track-left {
+      gap: 12px;
+    }
+    .job-grid.layout-compact .card-actions-row {
+      flex-direction: row;
+      align-items: stretch;
+      justify-content: space-between;
+    }
+    .job-grid.layout-compact .card-actions-row .btn-apply {
+      align-self: flex-start;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .job-grid.layout-compact .card-actions-row .highlights-wrap {
+      flex: 0 0 50%;
+      width: 50%;
+      max-width: 50%;
+      min-width: 0;
+      margin-top: 0;
+      margin-left: auto;
+    }
+    .job-grid.layout-compact .card-track-row {
+      flex-direction: row;
+      align-items: stretch;
+    }
+    .job-grid.layout-compact .card-track-left {
+      flex: 1;
+      min-width: 0;
+    }
+    .job-grid.layout-compact .card-track-row .qa-wrap {
+      flex: 1;
+      min-width: 0;
+      margin-top: 0;
+      padding: 12px;
+      border-top: none;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    @media (max-width: 900px) {
+      .job-grid.layout-compact .card-actions-row,
+      .job-grid.layout-compact .card-track-row {
+        flex-direction: column;
+      }
+    }
+
     .row-chevron {
       flex-shrink: 0;
       color: var(--muted);
@@ -1074,6 +1131,43 @@
       font-size: .82rem; color: var(--muted); line-height: 1.55;
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
       overflow: hidden;
+    }
+
+    /* Original job description (list / expanded body) */
+    .job-description {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+    .job-description summary {
+      cursor: pointer;
+      font-size: .78rem;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      list-style: none;
+    }
+    .job-description summary::-webkit-details-marker { display: none; }
+    .job-description summary::before {
+      content: "▸";
+      color: var(--muted);
+      font-size: .7rem;
+      flex-shrink: 0;
+    }
+    .job-description[open] summary::before { content: "▾"; }
+    .job-description-body {
+      margin-top: 10px;
+      font-size: .78rem;
+      color: var(--muted);
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 320px;
+      overflow-y: auto;
+      padding-right: 4px;
     }
 
     /* Job Wizard breakdown */
@@ -2605,26 +2699,35 @@ function renderCard(job) {
 
       ${matchReasons ? `<ul style="font-size:.78rem;color:var(--muted);padding-left:16px;line-height:1.6;">${matchReasons}</ul>` : ''}
 
-      <a class="btn-apply ${['applied','interview','rejected','offer'].includes(status) ? 'btn-applied' : ''}"
-         href="${escHtml(job.link || '#')}" target="_blank" rel="noopener">
-        ${['applied','interview','rejected','offer'].includes(status) ? '🔗 View Detail' : '🚀 Apply Now'}
-      </a>
+      ${job.description ? `
+      <details class="job-description" ${currentLayout === 'compact' ? 'open' : ''}>
+        <summary><span>Original description</span></summary>
+        <div class="job-description-body">${escHtml(job.description)}</div>
+      </details>` : ''}
 
-      ${renderHighlightsBlock(job)}
-
-      ${renderProgressBlock(job)}
-
-      <div class="notes-wrap">
-        <textarea
-          class="notes-textarea"
-          data-id="${job._id}"
-          placeholder="Notes: Rejected after interview / Direct rejection / Salary mismatch…"
-          rows="2"
-        >${escHtml(job.notes || '')}</textarea>
-        <button class="btn-save" data-id="${job._id}" onclick="saveNotes(this)">Save Notes</button>
+      <div class="card-actions-row">
+        <a class="btn-apply ${['applied','interview','rejected','offer'].includes(status) ? 'btn-applied' : ''}"
+           href="${escHtml(job.link || '#')}" target="_blank" rel="noopener">
+          ${['applied','interview','rejected','offer'].includes(status) ? '🔗 View Detail' : '🚀 Apply Now'}
+        </a>
+        ${renderHighlightsBlock(job)}
       </div>
 
-      ${renderApplicationQa(job)}
+      <div class="card-track-row">
+        <div class="card-track-left">
+          ${renderProgressBlock(job)}
+          <div class="notes-wrap">
+            <textarea
+              class="notes-textarea"
+              data-id="${job._id}"
+              placeholder="Notes: Rejected after interview / Direct rejection / Salary mismatch…"
+              rows="2"
+            >${escHtml(job.notes || '')}</textarea>
+            <button class="btn-save" data-id="${job._id}" onclick="saveNotes(this)">Save Notes</button>
+          </div>
+        </div>
+        ${renderApplicationQa(job)}
+      </div>
     </div>
   `;
   return card;

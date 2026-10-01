@@ -90,10 +90,12 @@ caffeinate -i ./run_quick.sh
 |---------|---------|
 | `/start` | Confirm bot is online |
 | `/test` | Confirm the Mac is connected and ready |
-| `/jobs` | Run `run_task.sh` in the background; push today’s match cards when done |
-| `/quick_jobs` | Run `run_quick.sh` in the background; push today’s match cards when done |
+| `/jobs` | Run `run_task.sh` in the background; status “Done” when finished |
+| `/quick_jobs` | Run `run_quick.sh` in the background; status “Done” when finished |
 | `/matches` | Push today’s `matched_jobs` without scraping |
 | `/indeed_ok` | Resume Indeed after human verification (also: inline **Continue** button) |
+
+**Match card push:** `run_task.sh` / `run_quick.sh` call `core.match_digest.push_todays_matched_jobs()` at the end of every successful pipeline. That covers Telegram `/jobs` / `/quick_jobs`, launchd, and any manual shell run. `/matches` uses the same digest helper without scraping.
 
 Start the bot: `python3 src/bot/telegram_bot.py`
 
@@ -233,7 +235,7 @@ flowchart TD
 
 | Step | Implementation | Purpose |
 |------|----------------|---------|
-| 1. Title blacklist | `is_title_excluded()` · `TITLE_EXCLUDE_KEYWORDS` | Skip clearly wrong roles before clicking |
+| 1. Title blacklist | `is_title_excluded()` · `TITLE_EXCLUDE_KEYWORDS` | Skip clearly wrong roles before clicking. `Cloud` only matches Cloud Engineer / Architect / similar roles, not “Cloud SaaS” in a frontend title. |
 | 2. Keyword hit | `title_matches_default_keywords()` · `DEFAULT_KEYWORDS` | Title already on-target → click without AI |
 | 3. AI title screen | `is_title_relevant_by_ai()` | After blacklist + no keyword: cheap AI “is this a target role?” |
 | 4. Dedup | `is_job_id_exists()` | Do not re-open known jobs |
@@ -323,7 +325,8 @@ job_scraper/
 │   │   ├── db_mongo.py          # Mongo helpers
 │   │   ├── scraper_utils.py     # title gates, Lingua, CDP helpers
 │   │   ├── challenge_wait.py    # Indeed captcha detect + Telegram resume flag
-│   │   └── telegram_notify.py   # sync Bot API notify (used by scrapers)
+│   │   ├── telegram_notify.py   # Sync Bot API helper (scraper alerts)
+│   │   └── match_digest.py      # Today's match cards → Telegram (pipeline + /matches)
 │   ├── scrapers/                # Indeed / LinkedIn / Quick / Manual
 │   ├── matching/
 │   │   ├── ai_matcher.py        # match orchestration

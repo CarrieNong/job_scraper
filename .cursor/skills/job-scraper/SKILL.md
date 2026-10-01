@@ -77,10 +77,11 @@ Location / German company / “nice to have German” must **not** fail the matc
 
 | Entry | Role |
 |-------|------|
-| `run_task.sh` / Telegram `/jobs` | Full: Indeed + LinkedIn (24h) parallel → AI match → unmatched desc cleanup |
-| `run_quick.sh` / Telegram `/quick_jobs` | Light: Indeed 24h (2 pages/keyword) + LinkedIn 12h quick URL (3 pages) in parallel → AI match |
+| `run_task.sh` / Telegram `/jobs` | Full: Indeed + LinkedIn (24h) parallel → AI match → unmatched desc cleanup → Telegram match digest |
+| `run_quick.sh` / Telegram `/quick_jobs` | Light: Indeed 24h (2 pages/keyword) + LinkedIn 12h quick URL (3 pages) in parallel → AI match → Telegram match digest |
 | `start_ui.sh` | Flask tracker UI (default port 5050) |
 | `src/bot/telegram_bot.py` | `/start` `/test` `/jobs` `/quick_jobs` `/matches` `/indeed_ok` |
+| `src/core/match_digest.py` | Shared “today’s matches” Telegram digest (pipeline + `/matches`) |
 | Individual `src/scrapers/*.py`, `src/matching/ai_matcher.py` | Debug / partial runs |
 
 When you change `run_task.sh` / `run_quick.sh`, check Telegram handlers still point at the right scripts and still describe timing/behavior correctly.

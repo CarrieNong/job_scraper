@@ -47,7 +47,9 @@ CHROME_USER_DATA_DIR = "/tmp/chrome_selenium"
 # Java uses \b to avoid matching JavaScript.
 TITLE_EXCLUDE_KEYWORDS = [
     r"\bJava\b",           # Java (not JavaScript)
-    r"\bCloud\b",
+    # Cloud *role*, not "Cloud" as a product/company adjective
+    # (e.g. keep "Frontend Engineer – Cloud SaaS")
+    r"\bCloud\s+(Engineer|Architect|Consultant|Native|Operations|Platform|Infrastructure)\b",
     r"\bLead\b",
     r"\bStaff\b",
     r"\bDevOps\b",
