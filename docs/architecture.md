@@ -163,6 +163,8 @@ Order:
 4. Clear descriptions on unmatched jobs older than 14 days
 5. Notify + optionally close Chrome
 
+Indeed search URL (`INDEED_CONFIG`): `de.indeed.com/jobs?q=<keyword>&l=&fromage=1`. Location stays empty (same as the desktop SERP). Hyphens in keywords are sent as spaces (`full-stack` → `q=full+stack`) so the query matches typing “Full Stack” in the search box. Each keyword still walks only 3 pages × ~15 cards.
+
 ### 3.2 Light — `run_quick.sh` / `/quick_jobs`
 
 ```mermaid
@@ -192,7 +194,7 @@ sequenceDiagram
 Differences from Full:
 
 - **Both platforms**, still in parallel
-- Indeed stays on the 24h search (`fromage=1`; the site cannot filter shorter) and walks **2 pages per keyword** instead of 3
+- Indeed stays on the 24h search (`fromage=1`, empty `l=`; the site cannot filter shorter than 1 day) and walks **2 pages per keyword** instead of 3
 - LinkedIn does **not** loop keywords — one pre-built OR search URL (Full Stack / Frontend / Product / GenAI, `f_TPR=r43200` = 12h), **3 pages × 30 cards**
 - **No** description cleanup step
 - LinkedIn card processing reuses `linkedin_scraper.scrape_jobs()` (same title + language filters). The quick URL is the SDUI `/jobs/search-results/` page: cards are `[componentkey^="job-card-component-ref-"]`, and the next page control is `pagination-controls-next-button-visible`
@@ -222,7 +224,9 @@ flowchart TD
     Dedup -->|yes| Skip3["Skip click"]
     Dedup -->|no| Click["Open detail<br/>count title_passed_clicked"]
 
-    Click --> Fetch["Fetch description (up to 3 retries)"]
+    Click --> Detail{"JD panel loaded?"}
+    Detail -->|timeout| TO["timeout_jobs<br/>(title + link, /timeouts)"]
+    Detail -->|yes| Fetch["Fetch description (up to 3 retries)"]
     Fetch --> Empty{"Usable description?<br/>≥ MIN_JOB_DESCRIPTION_CHARS"}
     Empty -->|no| SaveEmpty["Still save<br/>description_empty=true<br/>matcher will skip AI"]
     Empty -->|yes| Lang{"5. Lingua language check<br/>is_non_english_job_detail"}
@@ -239,6 +243,7 @@ flowchart TD
 | 2. Keyword hit | `title_matches_default_keywords()` · `DEFAULT_KEYWORDS` | Title already on-target → click without AI |
 | 3. AI title screen | `is_title_relevant_by_ai()` | After blacklist + no keyword: cheap AI “is this a target role?” |
 | 4. Dedup | `is_job_id_exists()` | Do not re-open known jobs |
+| 4b. Detail timeout | `save_timeout_job()` | Title passed but JD panel missing → `timeout_jobs` for `/timeouts` |
 | 5. JD language | `is_non_english_job_detail()` · Lingua | **JD body not English** (usually German posts) → **do not save**. UI: German Filtered |
 
 > Step 5 answers “what language is the JD written in?”, not “does an English JD require German skills?”. The latter is the match-stage German gate.
@@ -301,10 +306,17 @@ Details: [`matching_criteria.md`](./matching_criteria.md).
 | Collection | Written by | Contents |
 |------------|------------|----------|
 | `jobs` | scrapers; matcher writes analysis back | Jobs that passed the language gate (including empty-description placeholders) |
-| `matched_jobs` | matcher (≥ threshold); manual_apply | High-score matches / already applied. UI can store manual `highlights` tags (separate from AI `special_match`). |
-| `scraper_stats` | scrapers | Counters: `title_passed_clicked`, `german_filtered`, `ai_title_filtered`, … |
+| `matched_jobs` | matcher (≥ threshold); manual_apply; unmatched **Can Apply** override; **timeout review Add as Not Applied** | High-score matches / already applied / user-promoted unmatched or timeout jobs. UI can store manual `highlights` tags (separate from AI `special_match`). |
+| `timeout_jobs` | scrapers, when the title passed but the JD panel timed out | Title + link for later review (`/timeouts`). Open → **Add as Not Applied** (`pending`) or Dismiss. |
+| `scraper_stats` | scrapers | Counters: `title_passed_clicked`, `german_filtered`, `ai_title_filtered`, `detail_timeout`, … |
 
-Web UI (`web_app.py`) reads these for today’s funnel, match list, and unmatched reasons.
+Web UI (`web_app.py`) reads these for today’s funnel, match list, unmatched reasons, and scrape timeouts.
+
+**Timeouts page (`/timeouts`):** cards whose **title already passed** the scrape gates but the detail panel did not load in time. These are not saved to `jobs` (no JD). You open the original link and, if it is a real match, **Add as Not Applied** — that copies the card into `matched_jobs` as `pending`. Cards with no readable title (typical Indeed ad/empty slots, ~1 per SERP page) are not listed.
+
+**Unmatched page (`/unmatched`):** any job below the match threshold can be marked **Can Apply** (`user_status=watchlist`). That copies it into `matched_jobs` as `pending` (does not overwrite an existing Tracker row) so it can be tracked or marked applied. This is a manual override when AI scoring was wrong; it is not limited to the 6–7 score band.
+
+**Tracker Other statuses:** `unsuitable`, `closed`, `repost`, and Reset Not Applied (`pending`). These clear application progress and are not counted as applied. `repost` is a manual mark when the same role was posted again as a new listing and does not need another application.
 
 AI `special_match` / `special_match_reasons` are still written by the matcher for scoring (9–10 band) but are **not** shown as badges on the Tracker. Highlight badges on the matched-jobs page come only from the user-editable `highlights` list (`PATCH /api/jobs/<id>/highlights`).
 

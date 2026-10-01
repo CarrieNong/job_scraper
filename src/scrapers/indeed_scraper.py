@@ -16,7 +16,13 @@ if _SRC_ROOT not in sys.path:
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-from core.db_mongo import init_db, save_job, is_job_id_exists, increment_scraper_stat
+from core.db_mongo import (
+    init_db,
+    save_job,
+    is_job_id_exists,
+    increment_scraper_stat,
+    save_timeout_job,
+)
 from core.config import (
     INDEED_JOBS_PER_PAGE,
     INDEED_CONFIG,
@@ -45,6 +51,8 @@ from core.challenge_wait import (
 # Indeed configuration
 BASE_URL = INDEED_CONFIG["base_url"]
 FROMAGE = INDEED_CONFIG["fromage"]
+LOCATION = INDEED_CONFIG.get("location") or ""
+SORT = INDEED_CONFIG.get("sort") or ""
 SOURCE = INDEED_CONFIG["source"]
 RESULTS_PER_PAGE = INDEED_CONFIG["results_per_page"]
 
@@ -132,16 +140,16 @@ def extract_indeed_description(page, detail) -> str:
 def jobs_search_url(keyword, start=0):
     """
     Build Indeed search URL for a given keyword and pagination offset.
-    
-    Args:
-        keyword: Search keyword
-        start: Job offset for pagination
-        
-    Returns:
-        Full search URL
+
+    Hyphens in keywords become spaces in `q=` so "full-stack" searches as
+    "Full Stack", matching the desktop SERP (`q=Full+Stack&l=&fromage=1`).
     """
-    encoded = quote_plus(keyword)
-    url = f"{BASE_URL}?q={encoded}&l=&fromage={FROMAGE}&from=searchOnDesktopSerp"
+    query = (keyword or "").replace("-", " ").strip()
+    encoded = quote_plus(query)
+    loc = quote_plus(LOCATION) if LOCATION else ""
+    url = f"{BASE_URL}?q={encoded}&l={loc}&fromage={FROMAGE}&from=searchOnDesktopSerp"
+    if SORT:
+        url += f"&sort={quote_plus(SORT)}"
     if start > 0:
         url += f"&start={start}"
     return url
@@ -205,13 +213,14 @@ def extract_card_fields(card):
     return title, job_id, href
 
 
-def scrape_jobs(page, max_jobs=INDEED_JOBS_PER_PAGE):
+def scrape_jobs(page, max_jobs=INDEED_JOBS_PER_PAGE, keyword=""):
     """
     Scrape job listings from the current Indeed search results page.
     
     Args:
         page: Playwright page object
         max_jobs: Maximum number of jobs to process per page
+        keyword: Search keyword (stored on timeout review rows)
         
     Returns:
         List of job data dictionaries that were successfully saved
@@ -224,6 +233,10 @@ def scrape_jobs(page, max_jobs=INDEED_JOBS_PER_PAGE):
 
     for index in range(limit):
         print(f"\n=== Job {index + 1}/{limit} ===")
+        title = ""
+        job_id = ""
+        href_value = ""
+        title_passed = False
         try:
             cards = page.locator(JOB_CARD_SELECTOR)
             if index >= cards.count():
@@ -231,7 +244,10 @@ def scrape_jobs(page, max_jobs=INDEED_JOBS_PER_PAGE):
                 continue
 
             card = cards.nth(index)
-            card.scroll_into_view_if_needed()
+            try:
+                card.scroll_into_view_if_needed()
+            except PlaywrightTimeoutError:
+                print(f"Job {index + 1}: scroll timed out, still reading card")
             pause(0.4, 1.2)
             title, job_id, href_value = extract_card_fields(card)
             print(f"Job {index + 1}: {title} | id={job_id}")
@@ -251,6 +267,7 @@ def scrape_jobs(page, max_jobs=INDEED_JOBS_PER_PAGE):
                 print(f"Job {index + 1}: job_id {job_id} already in DB, skip click")
                 continue
 
+            title_passed = True
             # Title passed + new job → count as a candidate we evaluated
             increment_scraper_stat("title_passed_clicked")
             pause(*_PRE_CLICK_PAUSE, f"Job {index + 1}: think before click")
@@ -273,9 +290,25 @@ def scrape_jobs(page, max_jobs=INDEED_JOBS_PER_PAGE):
                         page.wait_for_selector(DETAIL_SELECTOR, timeout=15000)
                     except PlaywrightTimeoutError:
                         print(f"Job {index + 1}: detail still missing after challenge")
+                        save_timeout_job(
+                            title=title,
+                            job_id=job_id,
+                            link=href_value,
+                            source=SOURCE,
+                            keyword=keyword,
+                            reason="detail_timeout",
+                        )
                         continue
                 else:
                     print(f"Job {index + 1}: timed out while loading details")
+                    save_timeout_job(
+                        title=title,
+                        job_id=job_id,
+                        link=href_value,
+                        source=SOURCE,
+                        keyword=keyword,
+                        reason="detail_timeout",
+                    )
                     continue
 
             pause(*_POST_CLICK_PAUSE)
@@ -368,6 +401,15 @@ def scrape_jobs(page, max_jobs=INDEED_JOBS_PER_PAGE):
                     break
             else:
                 print(f"Job {index + 1}: timed out while loading details")
+            if title_passed:
+                save_timeout_job(
+                    title=title,
+                    job_id=job_id,
+                    link=href_value,
+                    source=SOURCE,
+                    keyword=keyword,
+                    reason="detail_timeout",
+                )
         except RuntimeError as e:
             # Challenge resume timeout — abort the page loop
             print(f"Job {index + 1}: {e}")
@@ -399,7 +441,9 @@ def scrape_keyword(page, keyword, max_pages, max_jobs_per_page=INDEED_JOBS_PER_P
     for page_index in range(max_pages):
         start = page_index * RESULTS_PER_PAGE
         print(f"\n--- {keyword}: page {page_index + 1}/{max_pages} (start={start}) ---")
-        page.goto(jobs_search_url(keyword, start=start), wait_until="domcontentloaded")
+        url = jobs_search_url(keyword, start=start)
+        print(f"URL: {url}")
+        page.goto(url, wait_until="domcontentloaded")
         pause(4, 8, f"Waiting for search results: {keyword}")
         dismiss_overlays(page)
 
@@ -415,7 +459,7 @@ def scrape_keyword(page, keyword, max_pages, max_jobs_per_page=INDEED_JOBS_PER_P
             print(f"No job cards for {keyword} on page {page_index + 1}, stop paging")
             break
 
-        jobs = scrape_jobs(page, max_jobs=max_jobs_per_page)
+        jobs = scrape_jobs(page, max_jobs=max_jobs_per_page, keyword=keyword)
         all_jobs.extend(jobs)
 
         if page_index < max_pages - 1:
@@ -431,6 +475,7 @@ def main():
     max_jobs = args.max_jobs if args.max_jobs is not None else INDEED_JOBS_PER_PAGE
     print(f"Source: {SOURCE}")
     print(f"Keywords: {keywords}")
+    print(f"Location: {LOCATION or '(empty)'}  sort={SORT or 'relevance'}  fromage={FROMAGE}")
     print(f"Max pages per keyword: {max_pages}")
     print(f"Max jobs per page: {max_jobs}")
 

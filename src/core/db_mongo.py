@@ -253,6 +253,7 @@ def increment_scraper_stat(key: str, amount: int = 1) -> None:
     german_filtered       – detail pages not in English (mostly German; FR etc.
                             rare) and skipped; UI still labels this bucket
                             "German Filtered"
+    detail_timeout        – title passed, but the JD panel did not load in time
     """
     db = get_db()
     now = datetime.now()
@@ -270,6 +271,109 @@ def increment_scraper_stat(key: str, amount: int = 1) -> None:
         },
         upsert=True,
     )
+
+
+TIMEOUT_JOBS_COLLECTION = "timeout_jobs"
+
+
+def _timeout_id_query(job_id, source):
+    """Match timeout / jobs docs, including Indeed jk variants."""
+    query = {"job_id": job_id, "source": source}
+    if source == "indeed":
+        variants = indeed_job_id_variants(job_id)
+        if variants:
+            query = {"job_id": {"$in": variants}, "source": source}
+    return query
+
+
+def save_timeout_job(
+    *,
+    title,
+    job_id,
+    link,
+    source,
+    company="",
+    location="",
+    keyword="",
+    reason="detail_timeout",
+) -> bool:
+    """
+    Store a title-qualified card whose detail panel timed out.
+
+    Only records jobs with a title + job_id (so you can open the link later).
+    Skips if the job is already in `jobs` or `matched_jobs`.
+    """
+    title = (title or "").strip()
+    job_id = str(job_id or "").strip()
+    source = (source or "").strip().lower()
+    if not title or not job_id or not source:
+        return False
+
+    db = get_db()
+    id_query = _timeout_id_query(job_id, source)
+    if db[COLLECTION_NAME].find_one(id_query, {"_id": 1}):
+        return False
+    if db["matched_jobs"].find_one(id_query, {"_id": 1}):
+        return False
+
+    now = datetime.now()
+    col = db[TIMEOUT_JOBS_COLLECTION]
+    existing = col.find_one(id_query)
+    if existing and existing.get("review_status") == "added":
+        return False
+
+    link = (link or "").strip()
+    if source == "indeed" and job_id and (not link or not link.startswith("http")):
+        link = f"https://de.indeed.com/viewjob?jk={job_id}"
+    if source == "linkedin" and job_id:
+        link = f"https://www.linkedin.com/jobs/view/{job_id}/"
+
+    doc = {
+        "title": title,
+        "job_id": job_id,
+        "link": link,
+        "source": source,
+        "company": (company or "").strip(),
+        "location": (location or "").strip(),
+        "keyword": (keyword or "").strip(),
+        "reason": reason,
+        "review_status": "open",
+        "updated_at": now,
+    }
+    if existing:
+        col.update_one({"_id": existing["_id"]}, {"$set": doc, "$inc": {"timeout_count": 1}})
+    else:
+        doc["created_at"] = now
+        doc["timeout_count"] = 1
+        col.insert_one(doc)
+    increment_scraper_stat("detail_timeout")
+    print(f"Job timeout saved for review: {title} ({source}/{job_id})")
+    return True
+
+
+def get_timeout_jobs(page=1, page_size=50, source=None, review_status="open"):
+    """Newest timeout cards first. Returns (jobs, total)."""
+    db = get_db()
+    col = db[TIMEOUT_JOBS_COLLECTION]
+    page = max(1, int(page or 1))
+    page_size = max(1, min(int(page_size or 50), 100))
+    query = {}
+    if source and source != "all":
+        query["source"] = source
+    if review_status and review_status != "all":
+        query["review_status"] = review_status
+    total = col.count_documents(query)
+    pages = max(1, (total + page_size - 1) // page_size) if total else 1
+    page = min(page, pages)
+    skip = (page - 1) * page_size
+    jobs = list(col.find(query).sort("created_at", -1).skip(skip).limit(page_size))
+    return jobs, total
+
+
+def count_open_timeout_jobs() -> int:
+    """Count timeout cards still waiting for review."""
+    db = get_db()
+    return db[TIMEOUT_JOBS_COLLECTION].count_documents({"review_status": "open"})
 
 
 def get_scraper_stats() -> dict:

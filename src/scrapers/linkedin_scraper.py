@@ -17,7 +17,13 @@ if _SRC_ROOT not in sys.path:
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-from core.db_mongo import init_db, save_job, is_job_id_exists, increment_scraper_stat
+from core.db_mongo import (
+    init_db,
+    save_job,
+    is_job_id_exists,
+    increment_scraper_stat,
+    save_timeout_job,
+)
 from core.config import (
     LINKEDIN_JOBS_PER_PAGE,
     MAX_JOBS_PER_PAGE,
@@ -337,7 +343,7 @@ def _save_open_linkedin_job(
     pause(4, 8, f"Job {index + 1}: wait before the next card")
 
 
-def scrape_sdui_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
+def scrape_sdui_jobs(page, max_jobs=MAX_JOBS_PER_PAGE, keyword=""):
     """
     Scrape the SDUI /jobs/search-results/ list.
 
@@ -353,6 +359,12 @@ def scrape_sdui_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
 
     for index in range(limit):
         print(f"\n=== Job {index + 1}/{limit} ===")
+        title = ""
+        job_id = ""
+        href_value = ""
+        company = ""
+        location = ""
+        title_passed = False
         try:
             cards = page.locator(SDUI_JOB_CARD_SELECTOR)
             if index >= cards.count():
@@ -380,6 +392,7 @@ def scrape_sdui_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
                 print(f"Job {index + 1}: job_id {job_id} already in DB, skip click")
                 continue
 
+            title_passed = True
             increment_scraper_stat("title_passed_clicked")
             job.click()
             page.wait_for_selector(
@@ -400,6 +413,17 @@ def scrape_sdui_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
             )
         except PlaywrightTimeoutError:
             print(f"Job {index + 1}: timed out while loading details")
+            if title_passed:
+                save_timeout_job(
+                    title=title,
+                    job_id=job_id,
+                    link=href_value,
+                    source=SOURCE,
+                    company=company,
+                    location=location,
+                    keyword=keyword,
+                    reason="detail_timeout",
+                )
         except Exception as e:
             print(f"Job {index + 1}: error {type(e).__name__}: {e}")
             continue
@@ -408,7 +432,7 @@ def scrape_sdui_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
     return jobs_data
 
 
-def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
+def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE, keyword=""):
     """
     Scrape job listings from the current LinkedIn search results page.
     
@@ -429,7 +453,7 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
         return []
 
     if page.locator(SDUI_JOB_CARD_SELECTOR).count() > 0:
-        return scrape_sdui_jobs(page, max_jobs=max_jobs)
+        return scrape_sdui_jobs(page, max_jobs=max_jobs, keyword=keyword)
 
     scroll_job_list(page)
     page.wait_for_selector(JOB_CARD_SELECTOR, timeout=15000)
@@ -441,6 +465,12 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
 
     for index in range(limit):
         print(f"\n=== Job {index + 1}/{limit} ===")
+        title = ""
+        job_id = ""
+        href_value = ""
+        company = ""
+        location = ""
+        title_passed = False
         try:
             cards = page.locator(JOB_CARD_SELECTOR)
             if index >= cards.count():
@@ -476,8 +506,7 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
                 print(f"Job {index + 1}: job_id {job_id} already in DB, skip click")
                 continue
 
-            # Title passed + new job → count as a candidate we evaluated
-            # Title passed + new job → count as a candidate we evaluated
+            title_passed = True
             increment_scraper_stat("title_passed_clicked")
             job.click()
             page.wait_for_selector(_LINKEDIN_DETAIL_WAIT, timeout=15000)
@@ -496,6 +525,17 @@ def scrape_jobs(page, max_jobs=MAX_JOBS_PER_PAGE):
 
         except PlaywrightTimeoutError:
             print(f"Job {index + 1}: timed out while loading details")
+            if title_passed:
+                save_timeout_job(
+                    title=title,
+                    job_id=job_id,
+                    link=href_value,
+                    source=SOURCE,
+                    company=company,
+                    location=location,
+                    keyword=keyword,
+                    reason="detail_timeout",
+                )
         except Exception as e:
             print(f"Job {index + 1}: error {type(e).__name__}: {e}")
             continue
@@ -556,7 +596,7 @@ def scrape_keyword(page, keyword, max_pages, max_jobs_per_page=LINKEDIN_JOBS_PER
     all_jobs = []
     for page_index in range(max_pages):
         print(f"\n--- {keyword}: page {page_index + 1}/{max_pages} ---")
-        jobs = scrape_jobs(page, max_jobs=max_jobs_per_page)
+        jobs = scrape_jobs(page, max_jobs=max_jobs_per_page, keyword=keyword)
         all_jobs.extend(jobs)
         if page_index < max_pages - 1:
             if not go_to_next_page(page):

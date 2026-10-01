@@ -23,6 +23,7 @@
       --offer:      #10b981;
       --unsuitable: #8b5cf6;
       --closed:     #71717a;
+      --repost:     #06b6d4;
     }
 
     body {
@@ -88,6 +89,7 @@
     .dot-offer      { background: var(--offer); }
     .dot-unsuitable { background: var(--unsuitable); }
     .dot-closed     { background: var(--closed); }
+    .dot-repost     { background: var(--repost); }
 
     /* ── Pipeline funnel ──────────────────────────────────────────── */
     .funnel-bar {
@@ -941,6 +943,7 @@
     .status-pill.s-offer      { color: var(--offer);      border-color: var(--offer)55;      background: #10b98118; }
     .status-pill.s-unsuitable { color: var(--unsuitable); border-color: var(--unsuitable)55; background: #8b5cf618; }
     .status-pill.s-closed     { color: var(--closed);     border-color: var(--closed)55;     background: #71717a18; }
+    .status-pill.s-repost     { color: var(--repost);     border-color: var(--repost)55;     background: #06b6d418; }
 
     .job-grid.layout-compact .score-badge {
       width: 34px; height: 34px; font-size: .78rem; border-radius: 8px;
@@ -1690,6 +1693,7 @@
   <a class="logo" href="/">💼 Job Tracker</a>
   <div class="header-actions">
     <a class="nav-btn" href="/manual-apply">✍️ Log Applied</a>
+    <a class="nav-btn" href="/timeouts">⏱ Timeouts <b id="timeoutNavCount"></b></a>
     <a class="nav-btn" href="/unmatched">Unmatched Jobs <b id="unmatchedNavCount"></b></a>
     <button id="refreshBtn" class="btn-save" onclick="refreshAll()" style="padding:6px 14px;font-size:.82rem;">↻ Refresh</button>
   </div>
@@ -1824,6 +1828,10 @@
     <span class="dot dot-closed"></span>
     <span>Closed <b id="cnt-closed">–</b></span>
   </div>
+  <div class="stat-chip" data-status="repost" onclick="setStatusFilter('repost')">
+    <span class="dot dot-repost"></span>
+    <span>Repost <b id="cnt-repost">–</b></span>
+  </div>
 </div>
 
 <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
@@ -1882,7 +1890,9 @@ const STATUS_LABEL = {
   offer:      'Offer',
   unsuitable: 'Unsuitable',
   closed:     'Closed',
+  repost:     'Repost',
 };
+const SIDE_STATUSES = ['unsuitable', 'closed', 'repost'];
 
 const TIMELINE_LABEL = {
   applied:          'Applied',
@@ -1943,11 +1953,15 @@ async function loadStats() {
     if (unmatchedEl) {
       unmatchedEl.textContent = typeof data.unmatched === 'number' ? `(${data.unmatched})` : '';
     }
+    const timeoutEl = document.getElementById('timeoutNavCount');
+    if (timeoutEl) {
+      timeoutEl.textContent = typeof data.timeouts === 'number' ? `(${data.timeouts})` : '';
+    }
     for (const [status, cnt] of Object.entries(data.by_status)) {
       const el = document.getElementById(`cnt-${status}`);
       if (el) el.textContent = cnt;
     }
-    ['pending','applied','rejected','interview','offer','unsuitable','closed'].forEach(s => {
+    ['pending','applied','rejected','interview','offer','unsuitable','closed','repost'].forEach(s => {
       if (!data.by_status[s]) {
         const el = document.getElementById(`cnt-${s}`);
         if (el) el.textContent = 0;
@@ -2700,7 +2714,7 @@ function renderCard(job) {
       ${matchReasons ? `<ul style="font-size:.78rem;color:var(--muted);padding-left:16px;line-height:1.6;">${matchReasons}</ul>` : ''}
 
       ${job.description ? `
-      <details class="job-description" ${currentLayout === 'compact' ? 'open' : ''}>
+      <details class="job-description">
         <summary><span>Original description</span></summary>
         <div class="job-description-body">${escHtml(job.description)}</div>
       </details>` : ''}
@@ -2815,7 +2829,7 @@ function renderProgressBlock(job) {
   const timeline = Array.isArray(job.application_timeline) ? job.application_timeline.slice() : [];
   jobTimelines[id] = timeline;
   const status = job.status || 'pending';
-  const sideVal = (status === 'unsuitable' || status === 'closed') ? status : '';
+  const sideVal = SIDE_STATUSES.includes(status) ? status : '';
 
   let trackHtml = '';
   if (!timeline.length) {
@@ -2861,6 +2875,7 @@ function renderProgressBlock(job) {
           <option value="" ${!sideVal ? 'selected' : ''}>—</option>
           <option value="unsuitable" ${sideVal==='unsuitable' ? 'selected':''}>🚫 Unsuitable</option>
           <option value="closed" ${sideVal==='closed' ? 'selected':''}>🔒 Closed</option>
+          <option value="repost" ${sideVal==='repost' ? 'selected':''}>🔁 Repost</option>
           <option value="pending">📋 Reset Not Applied</option>
         </select>
       </div>
@@ -3119,7 +3134,7 @@ async function updateSideStatus(select) {
       body: JSON.stringify({ status }),
     });
     if (!res.ok) throw new Error('Request failed');
-    const timeline = status === 'pending' ? [] : (status === 'unsuitable' || status === 'closed' ? [] : (jobTimelines[id] || []));
+    const timeline = (status === 'pending' || SIDE_STATUSES.includes(status)) ? [] : (jobTimelines[id] || []);
     refreshProgressUI(id, timeline, status);
     showToast(`✅ Status updated to "${STATUS_LABEL[status]}"`);
     loadStats();

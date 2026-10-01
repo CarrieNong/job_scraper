@@ -24,6 +24,7 @@ STATUS_LABELS = {
     "offer": "Offer",
     "unsuitable": "Unsuitable",
     "closed": "Closed",
+    "repost": "Repost",
 }
 
 

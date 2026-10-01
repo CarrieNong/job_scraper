@@ -106,7 +106,7 @@ def scrape_quick(page, max_pages: int, max_jobs_per_page: int) -> list:
     all_jobs: list = []
     for page_index in range(max_pages):
         print(f"\n--- Quick scrape: page {page_index + 1}/{max_pages} ---")
-        jobs = scrape_jobs(page, max_jobs=max_jobs_per_page)
+        jobs = scrape_jobs(page, max_jobs=max_jobs_per_page, keyword="quick")
         all_jobs.extend(jobs)
         if page_index < max_pages - 1:
             if not go_to_next_page(page):

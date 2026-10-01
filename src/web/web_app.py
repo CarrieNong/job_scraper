@@ -26,6 +26,9 @@ from core.db_mongo import (
     get_applied_location_stats,
     get_unmatched_jobs,
     count_unmatched_jobs,
+    get_timeout_jobs,
+    count_open_timeout_jobs,
+    save_job,
     _parse_filter_date,
     APPLIED_STATUSES,
 )
@@ -73,7 +76,11 @@ STATUS_MAP = {
     "offer":      "Offer",
     "unsuitable": "Unsuitable",
     "closed":     "Closed",
+    "repost":     "Repost",
 }
+
+# Other-dropdown statuses: no application progress, not counted as applied
+SIDE_STATUSES = ("unsuitable", "closed", "repost")
 
 # Application progress timeline steps (ordered interview track)
 TIMELINE_STEPS = {
@@ -96,7 +103,7 @@ TIMELINE_STEP_ORDER = (
     "interview_final",
 )
 
-# Unmatched jobs user_status mapping (for 6-7 score borderline jobs)
+# Unmatched jobs user_status mapping (manual override of AI mismatch)
 UNMATCHED_USER_STATUS_MAP = {
     "":           "Unmarked",
     "watchlist":  "Can Apply",
@@ -132,7 +139,7 @@ def _format_timeline_at(value) -> str:
 def _status_from_timeline(timeline: list, fallback: str = "pending") -> str:
     """Derive matched_jobs.status from the latest timeline step."""
     if not timeline:
-        return fallback if fallback in ("unsuitable", "closed", "pending") else "pending"
+        return fallback if fallback in (*SIDE_STATUSES, "pending") else "pending"
     last = timeline[-1].get("step", "")
     if last == "applied":
         return "applied"
@@ -168,7 +175,7 @@ def _hydrate_timeline(job: dict) -> list:
         return timeline
     status = job.get("status") or "pending"
     # Do not invent progress for side / reset statuses
-    if status in ("unsuitable", "closed", "pending"):
+    if status in (*SIDE_STATUSES, "pending"):
         return []
     # Backfill: older records only had a flat status (+ applied_at)
     if job.get("applied_at") or status in APPLIED_STATUSES:
@@ -265,6 +272,11 @@ def index():
 @app.route("/unmatched")
 def unmatched():
     return render_template("unmatched.html")
+
+
+@app.route("/timeouts")
+def timeouts():
+    return render_template("timeouts.html")
 
 
 @app.route("/api/jobs")
@@ -394,8 +406,8 @@ def api_update_status(job_id: str):
     if new_status in APPLIED_STATUSES and not job.get("applied_at"):
         update_fields["applied_at"] = now
 
-    # Side statuses (unsuitable/closed/pending) clear progress; others keep timeline
-    if new_status in ("unsuitable", "closed", "pending"):
+    # Side statuses (unsuitable/closed/repost/pending) clear progress; others keep timeline
+    if new_status in (*SIDE_STATUSES, "pending"):
         update_fields["application_timeline"] = []
         if new_status == "pending":
             update_fields["applied_at"] = None
@@ -422,8 +434,8 @@ def api_update_timeline(job_id: str):
 
     now = datetime.now()
     prev_status = job.get("status", "pending")
-    # Keep unsuitable/closed only when timeline is empty; otherwise derive from steps
-    fallback = prev_status if prev_status in ("unsuitable", "closed") and not timeline else "pending"
+    # Keep side statuses only when timeline is empty; otherwise derive from steps
+    fallback = prev_status if prev_status in SIDE_STATUSES and not timeline else "pending"
     new_status = _status_from_timeline(timeline, fallback=fallback)
 
     update_fields = {
@@ -618,8 +630,9 @@ def api_delete_job(job_id: str):
 
 @app.route("/api/unmatched-jobs/<job_id>/status", methods=["PATCH"])
 def api_update_unmatched_status(job_id: str):
-    """Update user_status of an unmatched (borderline) job.
-    When marked as 'watchlist' (Can Apply), also copy the job to matched_jobs.
+    """Update user_status of an unmatched job (any score below threshold).
+    When marked as 'watchlist' (Can Apply), also copy the job to matched_jobs
+    so it can be tracked / marked applied on the Tracker page.
     """
     data = request.get_json(silent=True) or {}
     new_status = data.get("user_status", "")
@@ -681,14 +694,16 @@ def api_update_unmatched_status(job_id: str):
                     "from_unmatched": True,
                 }
 
-                # replace_one with upsert: inserts if not there, updates if already there
-                matched_col.replace_one(
-                    {"job_id": jid, "source": source},
-                    doc,
-                    upsert=True,
-                )
-                copied_to_matched = True
-                print(f"[Can Apply] Copied job_id={jid} source={source} to matched_jobs")
+                # Insert only if this job is not already on the Tracker.
+                # Never replace an existing doc — that would wipe applied / notes.
+                existing = matched_col.find_one({"job_id": jid, "source": source})
+                if existing:
+                    copied_to_matched = True
+                    print(f"[Can Apply] Already in matched_jobs job_id={jid} source={source}")
+                else:
+                    matched_col.insert_one(doc)
+                    copied_to_matched = True
+                    print(f"[Can Apply] Copied job_id={jid} source={source} to matched_jobs")
 
         except Exception as e:
             copy_error = str(e)
@@ -697,6 +712,141 @@ def api_update_unmatched_status(job_id: str):
     return jsonify({"ok": True, "user_status": new_status,
                     "copied_to_matched": copied_to_matched,
                     "copy_error": copy_error})
+
+
+def _serialize_timeout(job: dict) -> dict:
+    job["_id"] = str(job["_id"])
+    for key in ("created_at", "updated_at", "added_to_matched_at"):
+        if key in job and isinstance(job[key], datetime):
+            job[key] = job[key].strftime("%Y-%m-%d %H:%M")
+    job["link"] = _normalize_link(job)
+    job.setdefault("company", "")
+    job.setdefault("location", "")
+    job.setdefault("keyword", "")
+    job.setdefault("timeout_count", 1)
+    job.setdefault("review_status", "open")
+    return job
+
+
+@app.route("/api/timeout-jobs")
+def api_timeout_jobs():
+    """Title-qualified cards whose JD panel timed out during scrape."""
+    try:
+        page = int(request.args.get("page", 1))
+    except (TypeError, ValueError):
+        page = 1
+    source = request.args.get("source") or "all"
+    review_status = request.args.get("review_status") or "open"
+    jobs, total = get_timeout_jobs(
+        page=page,
+        page_size=50,
+        source=source,
+        review_status=review_status,
+    )
+    page_size = 50
+    pages = max(1, (total + page_size - 1) // page_size) if total else 1
+    page = min(max(1, page), pages)
+    return jsonify({
+        "jobs": [_serialize_timeout(j) for j in jobs],
+        "total": total,
+        "page": page,
+        "pages": pages,
+    })
+
+
+@app.route("/api/timeout-jobs/<doc_id>/match", methods=["POST"])
+def api_timeout_match(doc_id: str):
+    """Promote a timeout card to matched_jobs as pending (Not Applied)."""
+    try:
+        oid = ObjectId(doc_id)
+    except Exception:
+        return jsonify({"error": "Invalid id"}), 400
+
+    col = get_collection("timeout_jobs")
+    doc = col.find_one({"_id": oid})
+    if not doc:
+        return jsonify({"error": "Timeout job not found"}), 404
+
+    jid = doc.get("job_id") or ""
+    source = doc.get("source") or ""
+    matched_col = get_collection("matched_jobs")
+    existing = matched_col.find_one({"job_id": jid, "source": source})
+    now = datetime.now()
+
+    if not existing:
+        matched_col.insert_one({
+            "title": doc.get("title", ""),
+            "company": doc.get("company", ""),
+            "location": doc.get("location", ""),
+            "link": _normalize_link(doc),
+            "job_id": jid,
+            "source": source,
+            "description": "",
+            "applicants": "",
+            "match_score": None,
+            "recommendation": "",
+            "special_match": False,
+            "special_match_reasons": [],
+            "disqualification_reason": "",
+            "match_reasons": ["Manually added after scrape timeout"],
+            "missing_requirements": [],
+            "red_flags": [],
+            "nice_to_have_matches": [],
+            "summary": "",
+            "what_youll_do": {"matched": [], "unmatched": []},
+            "what_theyre_looking_for": {"matched": [], "unmatched": []},
+            "status": "pending",
+            "matched_at": now,
+            "applied_at": None,
+            "application_timeline": [],
+            "notes": "",
+            "application_qa": [],
+            "highlights": [],
+            "from_timeout": True,
+        })
+        save_job({
+            "title": doc.get("title", ""),
+            "company": doc.get("company", ""),
+            "location": doc.get("location", ""),
+            "link": _normalize_link(doc),
+            "job_id": jid,
+            "source": source,
+            "status": "new",
+            "applicants": "",
+            "description": "",
+            "description_empty": True,
+        })
+        get_collection("jobs").update_one(
+            {"job_id": jid, "source": source},
+            {"$set": {"matched_at": now, "from_timeout": True}},
+        )
+
+    col.update_one(
+        {"_id": oid},
+        {"$set": {
+            "review_status": "added",
+            "added_to_matched_at": now,
+            "updated_at": now,
+        }},
+    )
+    return jsonify({"ok": True, "already": bool(existing)})
+
+
+@app.route("/api/timeout-jobs/<doc_id>/dismiss", methods=["POST"])
+def api_timeout_dismiss(doc_id: str):
+    """Hide a timeout card from the review list."""
+    try:
+        oid = ObjectId(doc_id)
+    except Exception:
+        return jsonify({"error": "Invalid id"}), 400
+    col = get_collection("timeout_jobs")
+    result = col.update_one(
+        {"_id": oid},
+        {"$set": {"review_status": "dismissed", "updated_at": datetime.now()}},
+    )
+    if result.matched_count == 0:
+        return jsonify({"error": "Timeout job not found"}), 404
+    return jsonify({"ok": True})
 
 
 @app.route("/api/stats")
@@ -712,12 +862,14 @@ def api_stats():
 
     scraper = get_scraper_stats()
     unmatched = count_unmatched_jobs(threshold=MATCH_THRESHOLD)
+    timeouts_open = count_open_timeout_jobs()
 
     return jsonify({
         # existing: matched-jobs filter chips
         "total":     ai_matched,
         "by_status": by_status,
         "unmatched": unmatched,
+        "timeouts":  timeouts_open,
         # new: full-pipeline funnel
         "funnel": {
             "title_clicked": scraper.get("title_passed_clicked", 0),
