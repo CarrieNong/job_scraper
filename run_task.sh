@@ -1,8 +1,7 @@
 #!/bin/bash
 # run_task.sh - Daily job scraping and AI matching pipeline
-# Execution order: Indeed ─┐
-#                           ├─(parallel)─> AI Matching
-#                LinkedIn ──┘
+# Two parallel lanes (Indeed / LinkedIn): scrape → match that source.
+# Job-card digest is sent only after both lanes finish.
 
 # Configuration
 PROJECT_DIR="/Users/carrienon/Desktop/code-project/job_scraper"
@@ -54,55 +53,46 @@ if ! lsof -nP -iTCP:9222 -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 
 cd "$PROJECT_DIR" || exit 1
+# shellcheck source=scripts/pipeline_common.sh
+source "$PROJECT_DIR/scripts/pipeline_common.sh"
 
-# Step 2 & 3: Indeed + LinkedIn scrapers (run in parallel).
+# Two parallel lanes: scrape then match that source as soon as it finishes.
 # Page and card budgets live in src/core/config.py.
 FULL_PAGES="$($PYTHON -c "import sys; sys.path.insert(0, 'src'); from core.config import FULL_MAX_PAGES; print(FULL_MAX_PAGES)")"
 INDEED_JOBS="$($PYTHON -c "import sys; sys.path.insert(0, 'src'); from core.config import INDEED_JOBS_PER_PAGE; print(INDEED_JOBS_PER_PAGE)")"
 LINKEDIN_JOBS="$($PYTHON -c "import sys; sys.path.insert(0, 'src'); from core.config import LINKEDIN_JOBS_PER_PAGE; print(LINKEDIN_JOBS_PER_PAGE)")"
+STAMP="$(date +%Y%m%d)"
 
-log "Step 1/3: Full scrape — ${FULL_PAGES} pages/keyword, Indeed ${INDEED_JOBS}/page, LinkedIn ${LINKEDIN_JOBS}/page"
-$PYTHON src/scrapers/indeed_scraper.py \
+log "Step 1/3: Full lanes — ${FULL_PAGES} pages/keyword, Indeed ${INDEED_JOBS}/page, LinkedIn ${LINKEDIN_JOBS}/page"
+run_source_lane "Indeed" "indeed" \
+  "$LOG_DIR/indeed_${STAMP}.log" "$LOG_DIR/matcher_indeed_${STAMP}.log" \
+  $PYTHON src/scrapers/indeed_scraper.py \
   --max-pages "$FULL_PAGES" \
-  --max-jobs "$INDEED_JOBS" \
-  > "$LOG_DIR/indeed_$(date +%Y%m%d).log" 2>&1 &
-INDEED_PID=$!
-$PYTHON src/scrapers/linkedin_scraper.py \
+  --max-jobs "$INDEED_JOBS" &
+INDEED_LANE=$!
+run_source_lane "LinkedIn" "linkedin" \
+  "$LOG_DIR/linkedin_${STAMP}.log" "$LOG_DIR/matcher_linkedin_${STAMP}.log" \
+  $PYTHON src/scrapers/linkedin_scraper.py \
   --max-pages "$FULL_PAGES" \
-  --max-jobs "$LINKEDIN_JOBS" \
-  > "$LOG_DIR/linkedin_$(date +%Y%m%d).log" 2>&1 &
-LINKEDIN_PID=$!
+  --max-jobs "$LINKEDIN_JOBS" &
+LINKEDIN_LANE=$!
 
-log "  Indeed  (PID: $INDEED_PID)  and  LinkedIn (PID: $LINKEDIN_PID)  running..."
+log "  Indeed lane (PID: $INDEED_LANE)  and  LinkedIn lane (PID: $LINKEDIN_LANE)  running..."
+wait $INDEED_LANE
+wait $LINKEDIN_LANE
 
-# Wait for both scrapers to finish
-wait $INDEED_PID;  INDEED_EXIT=$?
-wait $LINKEDIN_PID; LINKEDIN_EXIT=$?
-
-if [ $INDEED_EXIT -eq 0 ]; then
-    log "✅ Indeed scraper completed successfully"
+INDEED_EXIT="$(read_lane_exit indeed scrape)"
+LINKEDIN_EXIT="$(read_lane_exit linkedin scrape)"
+INDEED_MATCH_EXIT="$(read_lane_exit indeed match)"
+LINKEDIN_MATCH_EXIT="$(read_lane_exit linkedin match)"
+if [ "$INDEED_MATCH_EXIT" -eq 0 ] && [ "$LINKEDIN_MATCH_EXIT" -eq 0 ]; then
+    MATCHER_EXIT=0
 else
-    log "⚠️  WARNING: Indeed scraper failed (exit code: $INDEED_EXIT)"
+    MATCHER_EXIT=1
 fi
 
-if [ $LINKEDIN_EXIT -eq 0 ]; then
-    log "✅ LinkedIn scraper completed successfully"
-else
-    log "⚠️  WARNING: LinkedIn scraper failed (exit code: $LINKEDIN_EXIT)"
-fi
-
-# Step 4: AI matching (runs only after both scrapers are done)
-log "Step 3/4: Running AI job matching (both scrapers done)..."
-$PYTHON src/matching/ai_matcher.py --threshold 7.0 > "$LOG_DIR/matcher_$(date +%Y%m%d).log" 2>&1
-MATCHER_EXIT=$?
-if [ $MATCHER_EXIT -eq 0 ]; then
-    log "✅ AI matcher completed successfully"
-else
-    log "⚠️  WARNING: AI matcher failed (exit code: $MATCHER_EXIT)"
-fi
-
-# Step 5: Clear JD text on unmatched jobs older than 14 days (keeps link + AI fields)
-log "Step 4/4: Clearing old unmatched job descriptions..."
+# Clear JD text on unmatched jobs older than 14 days (keeps link + AI fields)
+log "Step 2/3: Clearing old unmatched job descriptions..."
 $PYTHON scripts/cleanup_unmatched_descriptions.py --execute --days 14 > "$LOG_DIR/cleanup_desc_$(date +%Y%m%d).log" 2>&1
 CLEANUP_EXIT=$?
 if [ $CLEANUP_EXIT -eq 0 ]; then
@@ -119,10 +109,11 @@ fi
 
 # Pipeline summary
 log "=== Pipeline Completed ==="
-log "Indeed:     $([ $INDEED_EXIT -eq 0 ] && echo '✅' || echo '❌')"
-log "LinkedIn:   $([ $LINKEDIN_EXIT -eq 0 ] && echo '✅' || echo '❌')"
-log "AI Matcher: $([ $MATCHER_EXIT -eq 0 ] && echo '✅' || echo '❌')"
-log "Desc Clean: $([ $CLEANUP_EXIT -eq 0 ] && echo '✅' || echo '❌')"
+log "Indeed scrape:   $([ "$INDEED_EXIT" -eq 0 ] && echo '✅' || echo '❌')"
+log "LinkedIn scrape: $([ "$LINKEDIN_EXIT" -eq 0 ] && echo '✅' || echo '❌')"
+log "Indeed match:    $([ "$INDEED_MATCH_EXIT" -eq 0 ] && echo '✅' || echo '❌')"
+log "LinkedIn match:  $([ "$LINKEDIN_MATCH_EXIT" -eq 0 ] && echo '✅' || echo '❌')"
+log "Desc Clean:      $([ $CLEANUP_EXIT -eq 0 ] && echo '✅' || echo '❌')"
 
 # Get today's stats from the database
 log "Fetching today's stats..."
@@ -147,8 +138,8 @@ SCRAPED=$(echo "$STATS" | awk '{print $1}')
 MATCHED=$(echo "$STATS" | awk '{print $2}')
 log "Today: ${SCRAPED} jobs scraped, ${MATCHED} high-quality matches"
 
-# Push today's matched jobs to Telegram (works for /jobs, cron, and launchd)
-log "Pushing today's matches to Telegram..."
+# Push today's matched jobs to Telegram only after both lanes finish
+log "Step 3/3: Pushing today's matches to Telegram..."
 $PYTHON -c "
 import sys
 sys.path.insert(0, 'src')

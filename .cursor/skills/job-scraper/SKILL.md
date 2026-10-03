@@ -77,8 +77,8 @@ Location / German company / “nice to have German” must **not** fail the matc
 
 | Entry | Role |
 |-------|------|
-| `run_task.sh` / Telegram `/jobs` | Full: Indeed + LinkedIn (24h) parallel → AI match → unmatched desc cleanup → Telegram match digest |
-| `run_quick.sh` / Telegram `/quick_jobs` | Light: Indeed 24h (2 pages/keyword) + LinkedIn 12h quick URL (3 pages) in parallel → AI match → Telegram match digest |
+| `run_task.sh` / Telegram `/jobs` | Full: Indeed + LinkedIn (24h) parallel lanes (scrape → match that source + Telegram ping) → unmatched desc cleanup → Telegram match digest |
+| `run_quick.sh` / Telegram `/quick_jobs` | Light: Indeed 24h (2 pages/keyword) + LinkedIn 12h quick URL (3 pages) parallel lanes (scrape → match that source + Telegram ping) → Telegram match digest |
 | `start_ui.sh` | Flask tracker UI (default port 5050) |
 | `src/bot/telegram_bot.py` | `/start` `/test` `/jobs` `/quick_jobs` `/matches` `/indeed_ok` |
 | `src/core/match_digest.py` | Shared “today’s matches” Telegram digest (pipeline + `/matches`) |
@@ -104,6 +104,7 @@ When you change `run_task.sh` / `run_quick.sh`, check Telegram handlers still po
 | Title blacklist | `TITLE_EXCLUDE_KEYWORDS` in `src/core/config.py` |
 | Indeed / LinkedIn / Quick URLs & selectors | `*_CONFIG` in `src/core/config.py` |
 | Match threshold / model | `.env` (`MATCH_THRESHOLD`, `AI_MODEL`, `OPENAI_API_KEY`) |
+| Telegram destination | `.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_ID`, `TELEGRAM_CHAT_ID`, `TELEGRAM_MESSAGE_THREAD_ID`) |
 | Scoring policy | `docs/matching_criteria.md` |
 
 ## Suggested agent workflow for feature work

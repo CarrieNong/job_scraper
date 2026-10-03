@@ -1,7 +1,8 @@
 #!/bin/bash
 # run_quick.sh — Morning light-scrape pipeline (run at ~11 AM)
 #
-# Indeed and LinkedIn run in parallel, then AI matching.
+# Two parallel lanes (Indeed / LinkedIn): scrape → match that source.
+# Job-card digest is sent only after both lanes finish.
 #   Indeed:   same 24h search as the full run (site minimum is 1 day),
 #             fewer pages per keyword (LIGHT_INDEED_MAX_PAGES).
 #   LinkedIn: the 12h quick URL (no keyword loop), LIGHT_LINKEDIN_MAX_PAGES.
@@ -62,57 +63,45 @@ if ! lsof -nP -iTCP:9222 -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 
 cd "$PROJECT_DIR" || exit 1
+# shellcheck source=scripts/pipeline_common.sh
+source "$PROJECT_DIR/scripts/pipeline_common.sh"
 
 # ---------------------------------------------------------------------------
-# Step 2: Indeed (24h, fewer pages) + LinkedIn quick URL, in parallel.
+# Two parallel lanes: scrape then match that source as soon as it finishes.
 # Budgets live in src/core/config.py.
 # ---------------------------------------------------------------------------
 INDEED_PAGES="$($PYTHON -c "import sys; sys.path.insert(0, 'src'); from core.config import LIGHT_INDEED_MAX_PAGES; print(LIGHT_INDEED_MAX_PAGES)")"
 INDEED_JOBS="$($PYTHON -c "import sys; sys.path.insert(0, 'src'); from core.config import INDEED_JOBS_PER_PAGE; print(INDEED_JOBS_PER_PAGE)")"
 LINKEDIN_PAGES="$($PYTHON -c "import sys; sys.path.insert(0, 'src'); from core.config import LIGHT_LINKEDIN_MAX_PAGES; print(LIGHT_LINKEDIN_MAX_PAGES)")"
 LINKEDIN_JOBS="$($PYTHON -c "import sys; sys.path.insert(0, 'src'); from core.config import LINKEDIN_JOBS_PER_PAGE; print(LINKEDIN_JOBS_PER_PAGE)")"
+STAMP="$(date +%Y%m%d)"
 
-log "Step 1/2: Light scrape — Indeed ${INDEED_PAGES} pages/keyword × ${INDEED_JOBS}, LinkedIn quick ${LINKEDIN_PAGES} pages × ${LINKEDIN_JOBS}"
-$PYTHON src/scrapers/indeed_scraper.py \
+log "Step 1/1: Light lanes — Indeed ${INDEED_PAGES} pages/keyword × ${INDEED_JOBS}, LinkedIn quick ${LINKEDIN_PAGES} pages × ${LINKEDIN_JOBS}"
+run_source_lane "Indeed" "indeed" \
+  "$LOG_DIR/indeed_light_${STAMP}.log" "$LOG_DIR/matcher_indeed_light_${STAMP}.log" \
+  $PYTHON src/scrapers/indeed_scraper.py \
   --max-pages "$INDEED_PAGES" \
-  --max-jobs "$INDEED_JOBS" \
-  > "$LOG_DIR/indeed_light_$(date +%Y%m%d).log" 2>&1 &
-INDEED_PID=$!
-$PYTHON src/scrapers/linkedin_quick_scraper.py \
+  --max-jobs "$INDEED_JOBS" &
+INDEED_LANE=$!
+run_source_lane "LinkedIn" "linkedin" \
+  "$LOG_DIR/linkedin_quick_${STAMP}.log" "$LOG_DIR/matcher_linkedin_light_${STAMP}.log" \
+  $PYTHON src/scrapers/linkedin_quick_scraper.py \
   --max-pages "$LINKEDIN_PAGES" \
-  --max-jobs "$LINKEDIN_JOBS" \
-  > "$LOG_DIR/linkedin_quick_$(date +%Y%m%d).log" 2>&1 &
-QUICK_PID=$!
+  --max-jobs "$LINKEDIN_JOBS" &
+LINKEDIN_LANE=$!
 
-log "  Indeed (PID: $INDEED_PID)  and  LinkedIn quick (PID: $QUICK_PID)  running..."
+log "  Indeed lane (PID: $INDEED_LANE)  and  LinkedIn lane (PID: $LINKEDIN_LANE)  running..."
+wait $INDEED_LANE
+wait $LINKEDIN_LANE
 
-wait $INDEED_PID; INDEED_EXIT=$?
-wait $QUICK_PID; QUICK_EXIT=$?
-
-if [ $INDEED_EXIT -eq 0 ]; then
-    log "✅ Indeed light scraper completed successfully"
+INDEED_EXIT="$(read_lane_exit indeed scrape)"
+QUICK_EXIT="$(read_lane_exit linkedin scrape)"
+INDEED_MATCH_EXIT="$(read_lane_exit indeed match)"
+LINKEDIN_MATCH_EXIT="$(read_lane_exit linkedin match)"
+if [ "$INDEED_MATCH_EXIT" -eq 0 ] && [ "$LINKEDIN_MATCH_EXIT" -eq 0 ]; then
+    MATCHER_EXIT=0
 else
-    log "⚠️  WARNING: Indeed light scraper failed (exit code: $INDEED_EXIT)"
-fi
-
-if [ $QUICK_EXIT -eq 0 ]; then
-    log "✅ LinkedIn quick scraper completed successfully"
-else
-    log "⚠️  WARNING: LinkedIn quick scraper failed (exit code: $QUICK_EXIT)"
-fi
-
-# ---------------------------------------------------------------------------
-# Step 3: AI matching (only jobs not yet analyzed)
-# ---------------------------------------------------------------------------
-log "Step 2/2: Running AI job matching..."
-$PYTHON src/matching/ai_matcher.py --threshold 7.0 \
-  > "$LOG_DIR/matcher_quick_$(date +%Y%m%d).log" 2>&1
-MATCHER_EXIT=$?
-
-if [ $MATCHER_EXIT -eq 0 ]; then
-    log "✅ AI matcher completed successfully"
-else
-    log "⚠️  WARNING: AI matcher failed (exit code: $MATCHER_EXIT)"
+    MATCHER_EXIT=1
 fi
 
 # Close only the Chrome this run started. A reused debug window is left open.
@@ -125,9 +114,10 @@ fi
 # Summary
 # ---------------------------------------------------------------------------
 log "=== Light Scrape Pipeline Completed ==="
-log "Indeed:         $([ $INDEED_EXIT -eq 0 ] && echo '✅' || echo '❌')"
-log "LinkedIn Quick: $([ $QUICK_EXIT  -eq 0 ] && echo '✅' || echo '❌')"
-log "AI Matcher:     $([ $MATCHER_EXIT -eq 0 ] && echo '✅' || echo '❌')"
+log "Indeed scrape:   $([ "$INDEED_EXIT" -eq 0 ] && echo '✅' || echo '❌')"
+log "LinkedIn scrape: $([ "$QUICK_EXIT" -eq 0 ] && echo '✅' || echo '❌')"
+log "Indeed match:    $([ "$INDEED_MATCH_EXIT" -eq 0 ] && echo '✅' || echo '❌')"
+log "LinkedIn match:  $([ "$LINKEDIN_MATCH_EXIT" -eq 0 ] && echo '✅' || echo '❌')"
 
 # Fetch stats from MongoDB
 STATS=$($PYTHON << 'EOF'

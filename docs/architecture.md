@@ -73,8 +73,8 @@ flowchart TB
 
 | Command | When | What it does | Typical time |
 |---------|------|--------------|--------------|
-| `./run_task.sh` | ~18:00 (or Telegram `/jobs`) | Full: Indeed + LinkedIn in parallel (24h, 3 pages/keyword) → AI match → cleanup old unmatched descriptions | 40–60 min |
-| `./run_quick.sh` | ~11:00 (or Telegram `/quick_jobs`) | Light: Indeed (24h, 2 pages/keyword) + LinkedIn quick URL (12h, 3 pages) in parallel → AI match | 20–40 min |
+| `./run_task.sh` | ~18:00 (or Telegram `/jobs`) | Full: Indeed + LinkedIn lanes in parallel (24h, 3 pages/keyword). Each source matches as soon as its scrape finishes, with Telegram pings; digest after both lanes; then cleanup old unmatched descriptions | 40–60 min |
+| `./run_quick.sh` | ~11:00 (or Telegram `/quick_jobs`) | Light: Indeed (24h, 2 pages/keyword) + LinkedIn quick URL (12h, 3 pages) lanes in parallel. Same per-source match + pings; digest after both lanes | 20–40 min |
 | `./start_ui.sh` | Anytime | Start Job Tracker Web UI (default `:5050`) | — |
 
 Prefer `caffeinate -i` for manual runs so sleep does not interrupt Playwright:
@@ -90,12 +90,16 @@ caffeinate -i ./run_quick.sh
 |---------|---------|
 | `/start` | Confirm bot is online |
 | `/test` | Confirm the Mac is connected and ready |
-| `/jobs` | Run `run_task.sh` in the background; status “Done” when finished |
-| `/quick_jobs` | Run `run_quick.sh` in the background; status “Done” when finished |
+| `/jobs` | Run `run_task.sh` in the background; per-source scrape/match pings; “Done” when both lanes finish |
+| `/quick_jobs` | Run `run_quick.sh` in the background; same per-source pings; “Done” when both lanes finish |
 | `/matches` | Push today’s `matched_jobs` without scraping |
 | `/indeed_ok` | Resume Indeed after human verification (also: inline **Continue** button) |
 
-**Match card push:** `run_task.sh` / `run_quick.sh` call `core.match_digest.push_todays_matched_jobs()` at the end of every successful pipeline. That covers Telegram `/jobs` / `/quick_jobs`, launchd, and any manual shell run. `/matches` uses the same digest helper without scraping.
+**Per-source progress:** each lane sends two short Telegram notes — scrape done (matching started), then matching done. Indeed and LinkedIn do not wait for each other to start matching.
+
+**Match card push:** `run_task.sh` / `run_quick.sh` call `core.match_digest.push_todays_matched_jobs()` only after **both** lanes finish. That covers Telegram `/jobs` / `/quick_jobs`, launchd, and any manual shell run. `/matches` uses the same digest helper without scraping.
+
+**Destination:** Job cards, pipeline Done/error status, and Indeed challenge alerts go to the configured forum topic (`TELEGRAM_CHAT_ID` + `TELEGRAM_MESSAGE_THREAD_ID` — Jiali Personal Hub → Job Assistance). Command authorization stays on `TELEGRAM_ALLOWED_USER_ID` (your personal account). Slash-command replies (`/start`, Started, …) stay in the topic you typed in; send commands from Job Assistance so those stay there too.
 
 Start the bot: `python3 src/bot/telegram_bot.py`
 
@@ -139,29 +143,37 @@ sequenceDiagram
     participant L as LinkedIn scraper
     participant DB as MongoDB
     participant AI as ai_matcher
+    participant TG as Telegram topic
     participant CL as cleanup script
 
     S->>C: Start or reuse debug Chrome
-    par Parallel scrape
+    par Parallel lanes
         S->>I: indeed_scraper.py -p 3 -j 15
         I->>DB: save_job after filters
+        I->>TG: Indeed scrape done — matching started
+        S->>AI: ai_matcher.py --source indeed
+        AI->>DB: mark_job_as_matched / save matched_jobs
+        AI->>TG: Indeed matching done
     and
         S->>L: linkedin_scraper.py -p 3 -j 30
         L->>DB: save_job after filters
+        L->>TG: LinkedIn scrape done — matching started
+        S->>AI: ai_matcher.py --source linkedin
+        AI->>DB: mark_job_as_matched / save matched_jobs
+        AI->>TG: LinkedIn matching done
     end
-    S->>AI: ai_matcher.py --threshold 7.0
-    AI->>DB: mark_job_as_matched / save matched_jobs
     S->>CL: cleanup_unmatched_descriptions --days 14
+    S->>TG: today's match-card digest
     S->>S: Desktop notification + close Chrome (only if this run started it)
 ```
 
 Order:
 
 1. Chrome remote debugging (reuse if `:9222` already open)
-2. **Indeed + LinkedIn in parallel** — 3 pages per keyword. Indeed processes about 15 cards per page (`start` steps by 15). LinkedIn processes up to 30 cards per page.
-3. After both finish → **AI matcher**
-4. Clear descriptions on unmatched jobs older than 14 days
-5. Notify + optionally close Chrome
+2. **Indeed + LinkedIn lanes in parallel** — 3 pages per keyword. Indeed processes about 15 cards per page (`start` steps by 15). LinkedIn processes up to 30 cards per page.
+3. As soon as a source finishes scraping → **AI matcher for that source only** (`--source indeed` / `--source linkedin`) + Telegram ping
+4. After both lanes finish → clear descriptions on unmatched jobs older than 14 days
+5. Push today's match-card digest + optionally close Chrome
 
 Indeed search URL (`INDEED_CONFIG`): `de.indeed.com/jobs?q=<keyword>&l=&fromage=1`. Location stays empty (same as the desktop SERP). Hyphens in keywords are sent as spaces (`full-stack` → `q=full+stack`) so the query matches typing “Full Stack” in the search box. Each keyword still walks only 3 pages × ~15 cards.
 
@@ -175,25 +187,33 @@ sequenceDiagram
     participant Q as LinkedIn Quick
     participant DB as MongoDB
     participant AI as ai_matcher
+    participant TG as Telegram topic
 
     S->>C: Start or reuse debug Chrome
-    par Parallel scrape
+    par Parallel lanes
         S->>I: indeed_scraper.py -p 2 -j 15
         Note over I: Same 24h search as Full<br/>Indeed date filter minimum is 1 day
         I->>DB: save_job after filters
+        I->>TG: Indeed scrape done — matching started
+        S->>AI: ai_matcher.py --source indeed
+        AI->>DB: mark / matched_jobs
+        AI->>TG: Indeed matching done
     and
         S->>Q: linkedin_quick_scraper.py -p 3 -j 30
         Note over Q: Fixed 12h OR search URL<br/>reuses scrape_jobs() filters
         Q->>DB: save_job after filters
+        Q->>TG: LinkedIn scrape done — matching started
+        S->>AI: ai_matcher.py --source linkedin
+        AI->>DB: mark / matched_jobs
+        AI->>TG: LinkedIn matching done
     end
-    S->>AI: ai_matcher.py --threshold 7.0
-    AI->>DB: mark / matched_jobs
+    S->>TG: today's match-card digest
     S->>S: Notify + close Chrome (only if this run started it)
 ```
 
 Differences from Full:
 
-- **Both platforms**, still in parallel
+- **Both platforms**, still in parallel lanes (scrape → match that source)
 - Indeed stays on the 24h search (`fromage=1`, empty `l=`; the site cannot filter shorter than 1 day) and walks **2 pages per keyword** instead of 3
 - LinkedIn does **not** loop keywords — one pre-built OR search URL (Full Stack / Frontend / Product / GenAI, `f_TPR=r43200` = 12h), **3 pages × 30 cards**
 - **No** description cleanup step
@@ -345,7 +365,7 @@ job_scraper/
 │   │   └── german_gate.py       # mandatory-German rule gate on English JDs
 │   ├── web/web_app.py           # Tracker UI
 │   └── bot/telegram_bot.py      # Telegram commands (+ Indeed resume)
-└── scripts/                     # cleanup / eval helpers
+└── scripts/                     # pipeline_common.sh, cleanup / eval helpers
 ```
 
 ---
@@ -354,4 +374,4 @@ job_scraper/
 
 > **Title gates (blacklist → keywords → AI title) → open detail → discard non-English JD → save English JD → matcher skips empty desc → mandatory-German rule gate → AI scores by criteria → ≥ 7 enters Tracker.**
 
-The two daily commands only change *how much* to scrape. Evening Full is 24h on both platforms, 3 pages per keyword (Indeed ~15 cards/page, LinkedIn 30). Morning Light runs both in parallel: Indeed the same 24h search for 2 pages per keyword, LinkedIn the 12h quick URL for 3 pages. **Filter and match rules are the same.**
+The two daily commands only change *how much* to scrape. Evening Full is 24h on both platforms, 3 pages per keyword (Indeed ~15 cards/page, LinkedIn 30). Morning Light runs both in parallel: Indeed the same 24h search for 2 pages per keyword, LinkedIn the 12h quick URL for 3 pages. Each source starts AI matching as soon as its scrape finishes; job cards are pushed only after both lanes complete. **Filter and match rules are the same.**

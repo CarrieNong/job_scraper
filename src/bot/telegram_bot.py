@@ -6,12 +6,14 @@ from dotenv import load_dotenv
 import os
 
 from telegram import BotCommand, Update
+from telegram.error import NetworkError, RetryAfter, TimedOut
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
 )
+from telegram.request import HTTPXRequest
 
 # Repo root: src/bot/telegram_bot.py -> ../../
 PROJECT_DIR = Path(__file__).resolve().parents[2]
@@ -26,6 +28,7 @@ from core.match_digest import (  # noqa: E402
     build_match_messages,
     fetch_todays_matched_jobs,
 )
+from core.telegram_notify import telegram_send_kwargs  # noqa: E402
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ALLOWED_USER_ID = int(os.getenv("TELEGRAM_ALLOWED_USER_ID"))
@@ -41,55 +44,91 @@ def is_allowed(update: Update) -> bool:
     )
 
 
+def _httpx_request(*, read_timeout: float) -> HTTPXRequest:
+    # Defaults are 5s; getUpdates long-poll and forum sends need more headroom.
+    return HTTPXRequest(
+        connect_timeout=15.0,
+        read_timeout=read_timeout,
+        write_timeout=15.0,
+        pool_timeout=10.0,
+    )
+
+
+async def _safe_telegram(action, *, attempts: int = 4):
+    """Retry TimedOut / RetryAfter / NetworkError instead of crashing the handler."""
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return await action()
+        except RetryAfter as exc:
+            wait = float(getattr(exc, "retry_after", 5)) + 1.0
+            print(f"Telegram flood wait {wait:.0f}s (attempt {attempt}/{attempts})")
+            last_exc = exc
+            await asyncio.sleep(wait)
+        except (TimedOut, NetworkError) as exc:
+            wait = 2.0 * attempt
+            print(
+                f"Telegram {type(exc).__name__}, retry in {wait:.0f}s "
+                f"(attempt {attempt}/{attempts})"
+            )
+            last_exc = exc
+            await asyncio.sleep(wait)
+    print(f"Telegram send failed after {attempts} attempts: {last_exc}")
+    return None
+
+
+async def _reply(update: Update, text: str, **kwargs) -> None:
+    if update.message is None:
+        return
+    await _safe_telegram(lambda: update.message.reply_text(text, **kwargs))
+
+
+async def _send_push(bot, text: str, **kwargs) -> None:
+    """Send to the configured group topic (not whatever chat the command came from)."""
+    dest = telegram_send_kwargs()
+    if dest.get("chat_id") is None:
+        return
+    await _safe_telegram(lambda: bot.send_message(**dest, text=text, **kwargs))
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update):
         return
 
-    await update.message.reply_text(
-        "👋 Job Assistant is online."
-    )
+    await _reply(update, "👋 Job Assistant is online.")
 
 
 async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update):
         return
 
-    await update.message.reply_text(
-        "✅ Mac is connected and ready."
-    )
+    await _reply(update, "✅ Mac is connected and ready.")
 
 
-async def _push_todays_matched_jobs(bot, chat_id: int) -> None:
+async def _push_todays_matched_jobs(bot) -> None:
     """Send today's matched jobs as one combined card (split only if too long)."""
     try:
         jobs = await asyncio.to_thread(fetch_todays_matched_jobs)
     except Exception as exc:
-        await bot.send_message(
-            chat_id=chat_id,
-            text=f"⚠️ Failed to load matches: {exc}",
-        )
+        await _send_push(bot, f"⚠️ Failed to load matches: {exc}")
         return
 
     if not jobs:
-        await bot.send_message(
-            chat_id=chat_id,
-            text="📭 No matched jobs for today.",
-        )
+        await _send_push(bot, "📭 No matched jobs for today.")
         return
 
     for message in build_match_messages(jobs):
-        await bot.send_message(
-            chat_id=chat_id,
-            text=message,
+        await _send_push(
+            bot,
+            message,
             parse_mode="HTML",
             disable_web_page_preview=True,
         )
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.4)
 
 
 async def _run_pipeline(
     bot,
-    chat_id: int,
     script: str,
     done_text: str,
 ) -> None:
@@ -101,6 +140,7 @@ async def _run_pipeline(
     The bot only sends Started / Done status here.
     """
     global _pipeline_running
+    status_text = done_text
     try:
         process = await asyncio.create_subprocess_exec(
             "caffeinate",
@@ -112,20 +152,17 @@ async def _run_pipeline(
         )
         returncode = await process.wait()
 
-        if returncode == 0:
-            await bot.send_message(chat_id=chat_id, text=done_text)
-        else:
-            await bot.send_message(
-                chat_id=chat_id,
-                text=f"❌ Pipeline exited with code {returncode}. Check logs/.",
+        if returncode != 0:
+            status_text = (
+                f"❌ Pipeline exited with code {returncode}. Check logs/."
             )
     except Exception as exc:
-        await bot.send_message(
-            chat_id=chat_id,
-            text=f"❌ Pipeline error: {exc}",
-        )
+        status_text = f"❌ Pipeline error: {exc}"
     finally:
         _pipeline_running = False
+
+    # Notify separately — a Telegram flood/timeout is not a pipeline failure.
+    await _send_push(bot, status_text)
 
 
 async def _start_pipeline(
@@ -142,26 +179,24 @@ async def _start_pipeline(
         return
 
     if _pipeline_running:
-        await update.message.reply_text(
-            "⏳ Pipeline is already running. I'll notify you when it finishes."
+        await _reply(
+            update,
+            "⏳ Pipeline is already running. I'll notify you when it finishes.",
         )
         return
 
     _pipeline_running = True
-    chat_id = update.effective_chat.id
 
-    await update.message.reply_text(started_text)
-
-    # Schedule on the PTB event loop so the handler returns immediately
-    # and polling stays responsive while Playwright / scrapers run.
+    # Start first so a slow/failed "Started" reply cannot skip the run
+    # or leave the lock stuck without a task.
     context.application.create_task(
         _run_pipeline(
             context.bot,
-            chat_id,
             script,
             done_text,
         )
     )
+    await _reply(update, started_text)
 
 
 async def jobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -170,17 +205,19 @@ async def jobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     Flow:
       /jobs → "Started" → caffeinate -i ./run_task.sh
-            → (script pushes today's match cards) → "Done"
+            → per-source scrape/match pings → match cards after both lanes
+            → "Done"
     """
     await _start_pipeline(
         update,
         context,
         script="./run_task.sh",
         started_text=(
-            "🚀 Started — Indeed / LinkedIn / AI match running in the background "
-            "(~40–60 min). Match cards will arrive when matching finishes."
+            "🚀 Started — Indeed and LinkedIn are scraping in parallel "
+            "(~40–60 min). You'll get a ping when each source finishes "
+            "scrape and match. Job cards arrive after both lanes are done."
         ),
-        done_text="✅ Done — full pipeline finished.",
+        done_text="✅ Done — both platforms finished.",
     )
 
 
@@ -193,18 +230,19 @@ async def quick_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     Flow:
       /quick_jobs → "Started" → caffeinate -i ./run_quick.sh
-                  → (script pushes today's match cards) → "Done"
+                  → per-source scrape/match pings → match cards after both
+                    lanes → "Done"
     """
     await _start_pipeline(
         update,
         context,
         script="./run_quick.sh",
         started_text=(
-            "⚡ Started — light scrape (Indeed + LinkedIn quick) / AI match "
-            "running in the background (~20–40 min). Match cards will arrive "
-            "when matching finishes."
+            "⚡ Started — light scrape, Indeed and LinkedIn in parallel "
+            "(~20–40 min). You'll get a ping when each source finishes "
+            "scrape and match. Job cards arrive after both lanes are done."
         ),
-        done_text="✅ Done — light pipeline finished.",
+        done_text="✅ Done — both platforms finished.",
     )
 
 
@@ -213,8 +251,8 @@ async def matches(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update):
         return
 
-    await update.message.reply_text("📥 Fetching today's matches...")
-    await _push_todays_matched_jobs(context.bot, update.effective_chat.id)
+    await _reply(update, "📥 Fetching today's matches...")
+    await _push_todays_matched_jobs(context.bot)
 
 
 async def indeed_ok(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -227,9 +265,10 @@ async def indeed_ok(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     path = signal_indeed_resume()
-    await update.message.reply_text(
+    await _reply(
+        update,
         "✅ Resume signal sent. The Indeed scraper will continue shortly.\n"
-        f"({path.name})"
+        f"({path.name})",
     )
 
 
@@ -258,11 +297,15 @@ async def indeed_resume_callback(
         )
     except Exception:
         # Message may already be edited or too old — still confirm in chat
-        if update.effective_chat is not None:
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="✅ Resume signal sent. The Indeed scraper will continue shortly.",
-            )
+        await _send_push(
+            context.bot,
+            "✅ Resume signal sent. The Indeed scraper will continue shortly.",
+        )
+
+
+async def _on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    err = context.error
+    print(f"Telegram handler error: {type(err).__name__}: {err}")
 
 
 async def _post_init(app: Application) -> None:
@@ -283,6 +326,8 @@ def main():
     app = (
         Application.builder()
         .token(BOT_TOKEN)
+        .request(_httpx_request(read_timeout=30.0))
+        .get_updates_request(_httpx_request(read_timeout=40.0))
         .post_init(_post_init)
         .build()
     )
@@ -294,11 +339,13 @@ def main():
     app.add_handler(CommandHandler("matches", matches))
     app.add_handler(CommandHandler("indeed_ok", indeed_ok))
     app.add_handler(CallbackQueryHandler(indeed_resume_callback, pattern=r"^indeed_resume$"))
+    app.add_error_handler(_on_error)
 
     print(f"Telegram bot is running... (cwd={PROJECT_DIR})")
     print("Commands: /start /test /jobs /quick_jobs /matches /indeed_ok")
 
-    app.run_polling()
+    # Drop queued commands from the flood so restart does not replay /jobs.
+    app.run_polling(drop_pending_updates=True, timeout=20)
 
 
 if __name__ == "__main__":
